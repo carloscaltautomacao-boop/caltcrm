@@ -1,0 +1,56 @@
+name: Deploy producao (Vercel prebuilt)
+
+# Por que existe: este projeto NAO pode ser buildado remotamente pela Vercel.
+# O entry api/index.ts importa './server.ts' (import com extensao .ts); no build
+# remoto a Vercel autodetecta a pasta api/ e deixa esse import literal ->
+# ERR_MODULE_NOT_FOUND em runtime -> 500 em toda a API.
+# A unica forma confiavel e o fluxo PREBUILT: build local (scripts/build-vercel.mjs,
+# que bundla todo o grafo .ts via esbuild em .vercel/output) + `vercel deploy --prebuilt`.
+# Este workflow replica exatamente esse fluxo a cada push na main.
+#
+# O auto-deploy NATIVO da Vercel (git integration) fica DESLIGADO via
+# `git.deploymentEnabled.main: false` no vercel.json — senao ele rodaria o build
+# remoto quebrado em paralelo a este job.
+#
+# Secret necessario no repo (Settings -> Secrets and variables -> Actions):
+#   VERCEL_TOKEN  -> criar em https://vercel.com/account/tokens
+# (ORG_ID e PROJECT_ID nao sao sigilosos e ficam inline abaixo.)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+env:
+  VERCEL_ORG_ID: team_4UI6KSSfwbTJDyEDKhXCgKvh
+  VERCEL_PROJECT_ID: prj_FGGXyXgBgJhJ0kSoqC97rIQNUXB1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Build prebuilt (.vercel/output)
+        run: node scripts/build-vercel.mjs
+
+      - name: Deploy prebuilt para producao
+        run: vercel deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
