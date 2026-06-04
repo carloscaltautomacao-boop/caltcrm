@@ -246,7 +246,9 @@ async function acionarHumano(cliente: Cliente, motivo: string, resumo: string): 
 }
 
 async function responderLead(cliente: Cliente, texto: string): Promise<void> {
-  await sendWhatsAppText(cliente.telefone, texto);
+  // Responde no JID EXATO em que o lead falou (whatsapp_jid; pode ser @lid). Sem ele (cadastro antigo),
+  // cai no telefone e o sendWhatsAppText resolve o numero entregavel. Contas LID so recebem pelo @lid.
+  await sendWhatsAppText(cliente.whatsapp_jid || cliente.telefone, texto);
   await salvarMensagem(cliente.id, 'out', 'texto', texto, 'ia');
   await registrarPrimeiraRespostaSeNecessario(cliente.id);
 }

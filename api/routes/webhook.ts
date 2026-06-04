@@ -34,12 +34,18 @@ async function processarWebhook(body: any): Promise<void> {
     const key = data?.key;
     if (!key || key.fromMe) return; // ignora o que a propria conta enviou
 
-    // remoteJid pode vir como @lid em contas Business; prefira o numero real (@s.whatsapp.net) quando existir.
+    // IDENTIDADE (dedup): prefira o numero real (senderPn) para nao partir o lead em dois cadastros.
     const jidReal: string = data?.senderPn || key?.senderPn || key?.remoteJid || '';
     const telefone = normalizarNumero(jidReal);
     if (!telefone) return;
 
-    const cliente = await obterOuCriarPorTelefone(telefone);
+    // ENTREGA: o remoteJid EXATO em que o lead falou. Contas LID-migradas chegam como `...@lid` e SO recebem
+    // resposta nesse mesmo JID — responder pelo numero canonicalizado (@s.whatsapp.net) nao entrega. Guardamos
+    // o JID cru no cadastro para o envio usar o canal certo. Sem `@`, deixa o envio resolver pelo telefone.
+    const remoteJidCru: string = key?.remoteJid || '';
+    const jidEntrega = remoteJidCru.includes('@') ? remoteJidCru : undefined;
+
+    const cliente = await obterOuCriarPorTelefone(telefone, jidEntrega);
     const entrada = await normalizarEntrada(data.message ?? {}, cliente.id);
     if (!entrada.texto) return;
 
@@ -47,7 +53,7 @@ async function processarWebhook(body: any): Promise<void> {
 
     // Comandos slash utilitarios (pre-handlers antes do agente) — respondem na hora, sem buffer.
     if (entrada.texto.trim().toLowerCase() === '/status') {
-      await sendWhatsAppText(telefone, `Etapa atual: ${cliente.etapa}`);
+      await sendWhatsAppText(cliente.whatsapp_jid || telefone, `Etapa atual: ${cliente.etapa}`);
       return;
     }
 

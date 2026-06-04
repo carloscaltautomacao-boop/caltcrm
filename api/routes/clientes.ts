@@ -57,9 +57,12 @@ clientesRouter.patch('/:id/etapa', requirePermission(PERMISSIONS.KANBAN_EDIT), a
 clientesRouter.post('/:id/mensagem', requirePermission(PERMISSIONS.CHAT_SEND), async (req, res) => {
   const { texto } = req.body ?? {};
   if (!texto) { res.status(400).json({ erro: 'texto obrigatorio' }); return; }
-  const { rows } = await query<{ telefone: string }>('SELECT telefone FROM clientes WHERE id = $1', [req.params.id]);
+  const { rows } = await query<{ telefone: string; whatsapp_jid: string | null }>(
+    'SELECT telefone, whatsapp_jid FROM clientes WHERE id = $1', [req.params.id],
+  );
   if (!rows[0]) { res.status(404).json({ erro: 'nao encontrado' }); return; }
-  await sendWhatsAppText(rows[0].telefone, texto);
+  // Entrega no JID exato do lead (pode ser @lid); fallback no telefone para cadastros antigos.
+  await sendWhatsAppText(rows[0].whatsapp_jid || rows[0].telefone, texto);
   await salvarMensagem(req.params.id, 'out', 'texto', texto, 'humano');
   res.json({ ok: true });
 });

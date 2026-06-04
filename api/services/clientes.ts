@@ -4,6 +4,9 @@ export interface Cliente {
   id: string;
   nome: string | null;
   telefone: string;
+  // remoteJid EXATO em que o lead falou (ex. ...@s.whatsapp.net ou ...@lid). e o destino entregavel das
+  // respostas. Pode ser null em cadastros antigos; nesse caso o envio cai no fallback por telefone.
+  whatsapp_jid: string | null;
   cidade: string | null;
   estado: string | null;
   profissao: string | null;
@@ -19,13 +22,22 @@ export interface Cliente {
   atualizado_em: string;
 }
 
-// Busca o cliente pelo telefone ou cria um novo (lead chegando).
-export async function obterOuCriarPorTelefone(telefone: string): Promise<Cliente> {
+// Busca o cliente pelo telefone ou cria um novo (lead chegando). `jid` e o remoteJid EXATO da mensagem
+// recebida (destino entregavel das respostas — pode ser @lid). Sempre que vier, grava/atualiza no cadastro
+// para garantir que a resposta volte pelo mesmo canal em que o lead falou (contas LID nao recebem no numero).
+export async function obterOuCriarPorTelefone(telefone: string, jid?: string): Promise<Cliente> {
   const { rows } = await query<Cliente>('SELECT * FROM clientes WHERE telefone = $1', [telefone]);
-  if (rows[0]) return rows[0];
+  if (rows[0]) {
+    // Atualiza o JID se mudou (ex.: cadastro antigo sem jid, ou conta migrada para @lid).
+    if (jid && rows[0].whatsapp_jid !== jid) {
+      await query('UPDATE clientes SET whatsapp_jid = $2 WHERE id = $1', [rows[0].id, jid]);
+      rows[0].whatsapp_jid = jid;
+    }
+    return rows[0];
+  }
   const novo = await query<Cliente>(
-    `INSERT INTO clientes (telefone, etapa, origem) VALUES ($1, 'novo', 'trafego') RETURNING *`,
-    [telefone],
+    `INSERT INTO clientes (telefone, whatsapp_jid, etapa, origem) VALUES ($1, $2, 'novo', 'trafego') RETURNING *`,
+    [telefone, jid ?? null],
   );
   return novo.rows[0]!;
 }

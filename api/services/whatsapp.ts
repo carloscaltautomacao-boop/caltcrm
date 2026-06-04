@@ -41,6 +41,10 @@ const cacheJid = new Map<string, string>();
 // (nao bloqueia o envio — no pior caso continua o comportamento antigo).
 async function resolverNumeroEntregavel(numero: string): Promise<string> {
   if (!EVO_URL) return numero;
+  // Ja e um JID completo (ex.: ...@s.whatsapp.net ou ...@lid)? Entao e o endereco entregavel EXATO do chat —
+  // manda como veio. NAO resolve nem tira digitos: contas LID so recebem no proprio @lid, e o numero
+  // "canonicalizado" (com/sem 9) nunca entrega para elas. Esse e o caminho normal de resposta ao lead.
+  if (numero.includes('@')) return numero;
   const emCache = cacheJid.get(numero);
   if (emCache) return emCache;
   try {

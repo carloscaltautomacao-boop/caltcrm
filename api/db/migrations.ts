@@ -42,6 +42,10 @@ const DDL: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_clientes_etapa ON clientes (etapa)`,
   `CREATE INDEX IF NOT EXISTS idx_clientes_criado ON clientes (criado_em)`,
+  // JID entregavel do WhatsApp (o remoteJid EXATO em que o lead falou: ex. 5511...@s.whatsapp.net ou
+  // 178843210006771@lid). e PARA ONDE a resposta tem de ir. Contas LID-migradas so recebem no @lid; o
+  // numero canonicalizado (telefone) serve so para identidade/dedup, NUNCA para entregar. Ver whatsapp.ts.
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_jid text`,
 
   // ----- Qualificacao (1:1 com cliente) -----
   `CREATE TABLE IF NOT EXISTS qualificacoes (
