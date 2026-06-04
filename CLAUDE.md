@@ -85,7 +85,13 @@ Variáveis em `.env` (modelo em `.env.example`): `OPENAI_API_KEY`, `DATABASE_URL
   **buffer** (`processarComBuffer`) faz `sleep` de `buffer_segundos` DEPOIS do 200, dentro do `waitUntil`.
   Debounce: só a última mensagem do burst processa (compara `ultimaMensagemEntradaId`); as anteriores
   abortam. `/status` não passa pelo buffer. ⚠️ Latência observada ~40-50s por resposta (buffer + rodadas de
-  tool do gpt-4.1) — fica perto do `maxDuration: 60` em `build-vercel.mjs`; se estourar, cortar rodadas/buffer.
+  tool do gpt-4.1) + os delays de "digitando" entre balões — `maxDuration` é **180s** em
+  `scripts/build-vercel.mjs` (folga sobra); se um dia estourar, cortar rodadas/buffer/delays.
+- **A resposta sai picada em vários balões** com "digitando..." entre eles (parece gente, não textão). O
+  agente separa os balões com LINHA EM BRANCO no prompt; `dividirEmBaloes` (em `whatsapp.ts`) quebra nisso
+  (máx. 4 balões), `responderLead` manda cada um com `delay` (o Evolution mostra "digitando" durante o delay)
+  e grava UMA linha `out` por balão. Texto sem linha em branco (ex.: a simulação) continua um balão só.
+  Liga/desliga em Configurações (`dividir_mensagens`, `digitacao_humanizada`, ambos default ON).
 - **Treinamento da config é a fonte principal do prompt**: `montarSystemAgente` injeta os blocos de
   `config` (persona/regras/roteiro/faq/base_conhecimento). Bloco vazio cai no `TREINAMENTO_PADRAO` de
   `prompts.ts`. `getConfig` faz merge sobre `DEFAULTS`, então config antiga em prod ganha os campos novos.
@@ -111,8 +117,9 @@ Teto de custo mensal configurável em Configurações (alerta no dashboard quand
 SAC/escalonamento humano (núcleo) · **treinamento da IA configurável** (persona, regras, roteiro, FAQ e base
 de conhecimento na aba Configurações — fonte PRINCIPAL do comportamento; `montarSystemAgente` só monta o
 esqueleto técnico em volta) · **buffer de mensagens** (debounce: agrupa os balões picados do lead antes de
-responder; `config.buffer_segundos`, padrão 8s; `processarComBuffer` em `agente.ts`) · comandos slash
-(`/status`) · **PWA instalável** (mobile-first).
+responder; `config.buffer_segundos`, padrão 8s; `processarComBuffer` em `agente.ts`) · **resposta humanizada**
+(divide o textão em balões curtos com "digitando..." entre eles; uma pergunta por vez; `dividir_mensagens` e
+`digitacao_humanizada` em Configurações) · comandos slash (`/status`) · **PWA instalável** (mobile-first).
 **Desligados:** agendamento, PDF, geração de imagem, **áudio explicativo pré-gravado** (removido),
 **follow-up automático** (campo `follow_up_horas` existe mas NÃO há job que dispare — continua Fase 1).
 

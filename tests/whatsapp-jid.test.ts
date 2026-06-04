@@ -24,11 +24,39 @@ describe('resolverEnderecos', () => {
     expect(r.telefone).toBe('5586988636999');
   });
 
+  // Caso REAL do webhook: o @lid vem em remoteJidAlt (ordem invertida em relacao ao message store).
+  // Era o que fazia a resposta sair pro numero @s.whatsapp.net e dar status ERROR.
+  it('lid em remoteJidAlt (ordem invertida do webhook): entrega no @lid mesmo assim', () => {
+    const key = {
+      remoteJid: '558688454343@s.whatsapp.net',
+      remoteJidAlt: '178843210006771@lid',
+    };
+    const r = resolverEnderecos(key, { senderPn: '5586988454343' });
+    expect(r.jidEntrega).toBe('178843210006771@lid');
+    expect(r.telefone).toBe('5586988454343');
+  });
+
   it('prefere senderPn para o telefone quando presente', () => {
     const key = { remoteJid: '178843210006771@lid', addressingMode: 'lid' };
     const r = resolverEnderecos(key, { senderPn: '5586988454343' });
     expect(r.jidEntrega).toBe('178843210006771@lid');
     expect(r.telefone).toBe('5586988454343');
+  });
+
+  // Payload REAL do webhook do Evolution: remoteJid == remoteJidAlt == numero, sem @lid, addressingMode:'lid'.
+  // O @lid nao vem no evento -> o webhook precisa resolver pelo store. Aqui garantimos os sinais corretos:
+  // ehLid=true (dispara o lookup) e sJidNumero = o numero @s.whatsapp.net usado na busca.
+  it('payload real do webhook (sem @lid, addressingMode=lid): sinaliza ehLid e expoe o numero p/ lookup', () => {
+    const key = {
+      remoteJid: '558688454343@s.whatsapp.net',
+      remoteJidAlt: '558688454343@s.whatsapp.net',
+      addressingMode: 'lid',
+    };
+    const r = resolverEnderecos(key, {});
+    expect(r.ehLid).toBe(true);
+    expect(r.sJidNumero).toBe('558688454343@s.whatsapp.net');
+    expect(r.telefone).toBe('5586988454343');
+    expect(r.jidEntrega).toBe('558688454343'); // sera trocado pelo @lid resolvido no webhook
   });
 
   it('contato salvo (@s.whatsapp.net, sem LID): entrega nos digitos puros do numero', () => {

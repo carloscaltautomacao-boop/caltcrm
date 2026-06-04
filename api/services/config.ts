@@ -10,6 +10,8 @@ export interface ConfigAgente {
   base_conhecimento: string;
   // --- Operacional ---
   buffer_segundos: number; // agrupa mensagens picadas do lead antes de responder (0 = desligado)
+  dividir_mensagens: boolean; // quebra a resposta em varios baloes curtos em vez de um textao
+  digitacao_humanizada: boolean; // mostra "digitando..." (delay do Evolution) antes de cada balao
   follow_up_horas: number;
   segmentos: string[];
   emojis_apenas_saudacao: boolean;
@@ -27,6 +29,8 @@ const DEFAULTS: ConfigAgente = {
   faq: TREINAMENTO_PADRAO.faq,
   base_conhecimento: TREINAMENTO_PADRAO.base_conhecimento,
   buffer_segundos: 8,
+  dividir_mensagens: true,
+  digitacao_humanizada: true,
   follow_up_horas: 24,
   segmentos: ['auto', 'imovel', 'solar'],
   emojis_apenas_saudacao: true,

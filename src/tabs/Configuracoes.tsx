@@ -13,6 +13,8 @@ interface Config {
   faq: string;
   base_conhecimento: string;
   buffer_segundos: number;
+  dividir_mensagens: boolean;
+  digitacao_humanizada: boolean;
   follow_up_horas: number;
   handoff: { carlos: string; rayane: string };
 }
@@ -30,6 +32,26 @@ function Campo({ label, hint, children }: { label: string; hint?: string; childr
 const CLASSE_TEXTAREA =
   'flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+
+function CampoToggle({
+  label, hint, checked, disabled, onChange,
+}: {
+  label: string; hint?: string; checked: boolean; disabled: boolean; onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="flex items-start gap-3 sm:col-span-2">
+      <input
+        type="checkbox" checked={checked} disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-input accent-primary disabled:opacity-50"
+      />
+      <span className="space-y-1">
+        <span className="block text-sm font-medium">{label}</span>
+        {hint && <span className="block text-xs font-normal text-muted-foreground">{hint}</span>}
+      </span>
+    </label>
+  );
+}
 
 function CampoTexto({
   label, hint, value, rows, disabled, onChange, placeholder,
@@ -261,6 +283,18 @@ export function Configuracoes() {
             <Input type="number" min={0} value={config.follow_up_horas} disabled={!podeEditar}
               onChange={(e) => set({ follow_up_horas: Number(e.target.value) })} />
           </Campo>
+          <CampoToggle
+            label="Dividir resposta em vários balões"
+            hint="A IA manda mensagens curtas (vários balões) em vez de um texto grande. Mais natural no WhatsApp."
+            checked={config.dividir_mensagens} disabled={!podeEditar}
+            onChange={(v) => set({ dividir_mensagens: v })}
+          />
+          <CampoToggle
+            label='Mostrar "digitando..."'
+            hint="Exibe o status de digitação com uma pausa natural antes de cada balão, como uma pessoa digitando."
+            checked={config.digitacao_humanizada} disabled={!podeEditar}
+            onChange={(v) => set({ digitacao_humanizada: v })}
+          />
         </CardContent>
       </Card>
 

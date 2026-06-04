@@ -4,7 +4,7 @@ import { logger } from '../lib/logger.ts';
 import { normalizarEntrada } from '../services/media.ts';
 import { obterOuCriarPorTelefone, salvarMensagem } from '../services/clientes.ts';
 import { processarComBuffer } from '../services/agente.ts';
-import { resolverEnderecos, sendWhatsAppText } from '../services/whatsapp.ts';
+import { resolverEnderecos, resolverLidPorNumero, sendWhatsAppText } from '../services/whatsapp.ts';
 
 export const webhookRouter = Router();
 
@@ -33,14 +33,26 @@ async function processarWebhook(body: any): Promise<void> {
     const key = data?.key;
     if (!key || key.fromMe) return; // ignora o que a propria conta enviou
 
-    // Lead de trafego pago quase sempre chega em "LID addressing mode": o WhatsApp entrega a mensagem com
-    // remoteJid = um id opaco terminando em `@lid` (NAO e telefone) e poe o numero real em remoteJidAlt
-    // (@s.whatsapp.net). `resolverEnderecos` decide o telefone (dedup) e o JID roteavel de entrega:
-    // para lead LID a resposta SO entrega no proprio `@lid`; responder no numero devolve status ERROR.
-    const { telefone, jidEntrega } = resolverEnderecos(key, data);
+    // Lead de trafego pago chega em "LID addressing mode" (key.addressingMode === 'lid'). Nessa conta o
+    // Evolution SO entrega a resposta no JID `@lid`; responder no numero/@s.whatsapp.net devolve status ERROR.
+    // `resolverEnderecos` da o telefone (dedup) e o melhor destino que da pra saber so pelo payload.
+    const { telefone, jidEntrega, ehLid, sJidNumero } = resolverEnderecos(key, data);
     if (!telefone) return;
 
-    const cliente = await obterOuCriarPorTelefone(telefone, jidEntrega);
+    // O webhook avisa addressingMode:'lid' mas NAO manda o `@lid`. Resolvemos o `@lid` no message store do
+    // Evolution (a partir do numero) e respondemos nele — esse e o unico destino que de fato entrega.
+    let entrega = jidEntrega;
+    if (ehLid && !entrega?.endsWith('@lid') && sJidNumero) {
+      const lid = await resolverLidPorNumero(sJidNumero);
+      if (lid) {
+        entrega = lid;
+        logger.info('webhook: @lid resolvido para entrega', { lid });
+      } else {
+        logger.warn('webhook: LID mode mas @lid nao achado no store; caindo no numero (pode dar ERROR)', { sJidNumero });
+      }
+    }
+
+    const cliente = await obterOuCriarPorTelefone(telefone, entrega);
     const entrada = await normalizarEntrada(data.message ?? {}, cliente.id);
     if (!entrada.texto) return;
 

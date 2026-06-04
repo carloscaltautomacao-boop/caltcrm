@@ -30,23 +30,71 @@ export interface EventoKey {
 //  - `jidEntrega`: o JID ROTEAVEL de ENTREGA das respostas. Para lead em LID addressing mode e o `@lid`
 //    COMPLETO (com sufixo) — unico destino que entrega; responder no numero/@s.whatsapp.net devolve status
 //    ERROR e nunca chega. Para contato salvo (sem LID) sao os digitos puros do numero.
-export function resolverEnderecos(key: EventoKey, data?: EventoKey): { telefone: string; jidEntrega?: string } {
+export interface EnderecosResolvidos {
+  // Numero real canonicalizado (com o 9) — chave de dedup/cadastro.
+  telefone: string;
+  // Melhor destino de ENTREGA conhecido SO pelo payload: o `@lid` se ele vier no evento; senao os digitos
+  // do numero. Para lead LID o numero NAO entrega (status ERROR) — o webhook deve trocar pelo @lid resolvido.
+  jidEntrega?: string;
+  // true quando o contato esta em "LID addressing mode" (addressingMode === 'lid' ou ha um @lid no payload).
+  ehLid: boolean;
+  // O JID @s.whatsapp.net do lead (ex.: `558688454343@s.whatsapp.net`) — usado para resolver o @lid no store.
+  sJidNumero?: string;
+}
+
+export function resolverEnderecos(key: EventoKey, data?: EventoKey): EnderecosResolvidos {
   const remoteJid = key?.remoteJid || '';
   const remoteJidAlt = key?.remoteJidAlt || data?.remoteJidAlt || '';
   const addressingMode = key?.addressingMode || data?.addressingMode || '';
-  const ehLid = addressingMode === 'lid' || remoteJid.endsWith('@lid');
 
-  // O numero real nunca vem do @lid (que nao e telefone): so do senderPn ou de um JID @s.whatsapp.net.
-  const sjid = remoteJidAlt.endsWith('@s.whatsapp.net') ? remoteJidAlt
-    : remoteJid.endsWith('@s.whatsapp.net') ? remoteJid : '';
-  const jidReal = data?.senderPn || key?.senderPn || sjid || '';
+  // O @lid pode (em algumas versoes) vir em remoteJid ou remoteJidAlt; mas no webhook do Evolution atual ele
+  // NAO vem em campo nenhum — vem so o numero @s.whatsapp.net + addressingMode:'lid'. Procuramos o @lid em
+  // ambos por robustez; quando ausente, o webhook resolve via store (resolverLidPorNumero).
+  const candidatos = [remoteJid, remoteJidAlt];
+  const lidJid = candidatos.find((j) => j.endsWith('@lid')) || '';
+  const sJid = candidatos.find((j) => j.endsWith('@s.whatsapp.net')) || '';
+  const ehLid = addressingMode === 'lid' || !!lidJid;
+
+  // IDENTIDADE (dedup): numero real canonicalizado (com o 9). Vem do senderPn ou do JID @s.whatsapp.net;
+  // NUNCA do @lid (que nao e telefone).
+  const jidReal = data?.senderPn || key?.senderPn || sJid || '';
   const telefone = normalizarNumero(jidReal);
 
-  const jidEntrega = ehLid
-    ? (remoteJid || undefined)
-    : (sjid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/\D/g, '') || undefined);
+  const jidEntrega = lidJid
+    ? lidJid
+    : (sJid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/\D/g, '') || undefined);
 
-  return { telefone, jidEntrega };
+  return { telefone, jidEntrega, ehLid, sJidNumero: sJid || undefined };
+}
+
+// Resolve o `@lid` de um lead a partir do seu JID @s.whatsapp.net, consultando o message store do Evolution.
+// Necessario porque o webhook avisa que o contato esta em LID mode mas NAO entrega o @lid — e so o @lid
+// entrega a resposta (responder no numero da status ERROR). Retorna o `...@lid` ou null se nao achar.
+export async function resolverLidPorNumero(sJidNumero: string): Promise<string | null> {
+  if (!EVO_URL || !sJidNumero) return null;
+  try {
+    const r = await fetch(`${EVO_URL}/chat/findMessages/${EVO_INSTANCE}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ where: { key: { remoteJidAlt: sJidNumero } } }),
+    });
+    if (!r.ok) {
+      logger.error('whatsapp: resolverLid findMessages falhou', { status: r.status, sJidNumero });
+      return null;
+    }
+    const j = (await r.json()) as { messages?: { records?: unknown[] } | unknown[] };
+    const box = j?.messages as { records?: unknown[] } | unknown[] | undefined;
+    const recs = (Array.isArray(box) ? box : box?.records) || [];
+    for (const m of recs as { key?: { remoteJid?: string; remoteJidAlt?: string } }[]) {
+      const rj = m?.key?.remoteJid;
+      // confirma que o registro e mesmo desse contato (defensivo contra filtro frouxo do store)
+      if (typeof rj === 'string' && rj.endsWith('@lid') && m?.key?.remoteJidAlt === sJidNumero) return rj;
+    }
+    return null;
+  } catch (e) {
+    logger.error('whatsapp: erro de rede no resolverLid', e);
+    return null;
+  }
 }
 
 // Celular BR completo tem 13 digitos: 55 + DDD(2) + 9 + assinante(8). Alguns eventos chegam
@@ -61,12 +109,34 @@ function canonicalizarCelularBR(num: string): string {
   return num;
 }
 
+// Quebra a resposta da IA em "balões" (mensagens separadas no WhatsApp) pra soar como uma pessoa digitando,
+// em vez de despejar um textão. Convenção: o agente separa cada balão com uma LINHA EM BRANCO (ver o prompt
+// em montarSystemAgente); aqui partimos nisso, limpamos e limitamos a MAX_BALOES — o excedente volta junto
+// no último balão pra não picar demais. Texto SEM linha em branco (ex.: a simulação, que usa quebras
+// simples) continua como UM balão só. Retorna [] se o texto for vazio (o chamador ignora).
+const MAX_BALOES = 4;
+
+export function dividirEmBaloes(texto: string): string[] {
+  const partes = texto.split(/\n[ \t]*\n+/).map((p) => p.trim()).filter(Boolean);
+  if (partes.length <= MAX_BALOES) return partes;
+  // Mantém no máximo MAX_BALOES mensagens: junta o que sobrar no último balão.
+  return [...partes.slice(0, MAX_BALOES - 1), partes.slice(MAX_BALOES - 1).join('\n\n')];
+}
+
+// Tempo de "digitando..." (delay do Evolution) antes de um balão: proporcional ao tamanho, com piso e teto
+// pra parecer natural sem travar a função serverless (roda dentro do waitUntil, somado ao buffer + IA).
+export function calcularDelayDigitacao(texto: string): number {
+  return Math.min(3500, Math.max(1000, Math.round(texto.length * 45)));
+}
+
 // Envia para o `numero`/JID recebido EXATAMENTE como o webhook resolveu (ver routes/webhook.ts):
 //  - lead em LID addressing mode -> o JID `@lid` COMPLETO (com sufixo). E o unico destino que entrega para
 //    esses leads; mandar para o numero/@s.whatsapp.net devolve status ERROR e nunca chega.
 //  - contato salvo (sem LID) -> os digitos puros do numero real.
 // O Evolution aceita tanto digitos quanto um JID completo (`...@lid`, `...@s.whatsapp.net`) no campo `number`.
-export async function sendWhatsAppText(numero: string, texto: string): Promise<void> {
+// `delayMs` > 0 faz o Evolution exibir "digitando..." por esse tempo ANTES de enviar (presença + pausa
+// humana num unico request); o request fica bloqueado durante o delay, por isso o piso/teto em calcularDelay.
+export async function sendWhatsAppText(numero: string, texto: string, delayMs = 0): Promise<void> {
   if (!EVO_URL) {
     logger.warn('whatsapp: EVO_URL nao configurado, mensagem nao enviada', { numero });
     return;
@@ -75,7 +145,7 @@ export async function sendWhatsAppText(numero: string, texto: string): Promise<v
     const r = await fetch(`${EVO_URL}/message/sendText/${EVO_INSTANCE}`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ number: numero, text: texto }),
+      body: JSON.stringify({ number: numero, text: texto, ...(delayMs > 0 ? { delay: delayMs } : {}) }),
     });
     const corpo = await r.text();
     if (!r.ok) {

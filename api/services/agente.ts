@@ -5,7 +5,7 @@ import { logger } from '../lib/logger.ts';
 import { EXTRATOR_PROMPT, montarSystemAgente } from '../agents/prompts.ts';
 import { TOOLS } from '../agents/tools.ts';
 import { getConfig } from './config.ts';
-import { sendWhatsAppText } from './whatsapp.ts';
+import { sendWhatsAppText, dividirEmBaloes, calcularDelayDigitacao } from './whatsapp.ts';
 import {
   type Cliente,
   atualizarCliente,
@@ -248,8 +248,17 @@ async function acionarHumano(cliente: Cliente, motivo: string, resumo: string): 
 async function responderLead(cliente: Cliente, texto: string): Promise<void> {
   // Responde no JID roteavel gravado pelo webhook (whatsapp_jid): o `@lid` completo para leads em LID
   // addressing mode, ou os digitos do numero para contato salvo. Cadastro antigo sem jid cai no telefone.
-  await sendWhatsAppText(cliente.whatsapp_jid || cliente.telefone, texto);
-  await salvarMensagem(cliente.id, 'out', 'texto', texto, 'ia');
+  const destino = cliente.whatsapp_jid || cliente.telefone;
+  const config = await getConfig();
+
+  // Divide o textão em balões (mais humano) e manda cada um com "digitando..." antes. Cada balão vira uma
+  // linha 'out' no historico/CRM, fiel ao que o lead recebeu. Toggles desligam cada comportamento.
+  const baloes = config.dividir_mensagens ? dividirEmBaloes(texto) : [texto.trim()].filter(Boolean);
+  for (const balao of baloes) {
+    const delay = config.digitacao_humanizada ? calcularDelayDigitacao(balao) : 0;
+    await sendWhatsAppText(destino, balao, delay);
+    await salvarMensagem(cliente.id, 'out', 'texto', balao, 'ia');
+  }
   await registrarPrimeiraRespostaSeNecessario(cliente.id);
 }
 
