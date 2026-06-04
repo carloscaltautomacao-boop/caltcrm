@@ -17,6 +17,38 @@ export function normalizarNumero(jid: string): string {
   return canonicalizarCelularBR(digitos);
 }
 
+// Estrutura minima da `key`/`data` de um evento MESSAGES_UPSERT do Evolution (so o que usamos aqui).
+export interface EventoKey {
+  remoteJid?: string;
+  remoteJidAlt?: string;
+  addressingMode?: string;
+  senderPn?: string;
+}
+
+// Resolve, a partir do evento do Evolution, os DOIS enderecos que o webhook precisa:
+//  - `telefone`: numero real canonicalizado (com o 9) — chave de dedup/cadastro do lead.
+//  - `jidEntrega`: o JID ROTEAVEL de ENTREGA das respostas. Para lead em LID addressing mode e o `@lid`
+//    COMPLETO (com sufixo) — unico destino que entrega; responder no numero/@s.whatsapp.net devolve status
+//    ERROR e nunca chega. Para contato salvo (sem LID) sao os digitos puros do numero.
+export function resolverEnderecos(key: EventoKey, data?: EventoKey): { telefone: string; jidEntrega?: string } {
+  const remoteJid = key?.remoteJid || '';
+  const remoteJidAlt = key?.remoteJidAlt || data?.remoteJidAlt || '';
+  const addressingMode = key?.addressingMode || data?.addressingMode || '';
+  const ehLid = addressingMode === 'lid' || remoteJid.endsWith('@lid');
+
+  // O numero real nunca vem do @lid (que nao e telefone): so do senderPn ou de um JID @s.whatsapp.net.
+  const sjid = remoteJidAlt.endsWith('@s.whatsapp.net') ? remoteJidAlt
+    : remoteJid.endsWith('@s.whatsapp.net') ? remoteJid : '';
+  const jidReal = data?.senderPn || key?.senderPn || sjid || '';
+  const telefone = normalizarNumero(jidReal);
+
+  const jidEntrega = ehLid
+    ? (remoteJid || undefined)
+    : (sjid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/\D/g, '') || undefined);
+
+  return { telefone, jidEntrega };
+}
+
 // Celular BR completo tem 13 digitos: 55 + DDD(2) + 9 + assinante(8). Alguns eventos chegam
 // sem o nono digito (12 digitos). Se for celular BR (assinante comeca em 6-9), insere o 9
 // para casar com o cadastro existente. Fixos (assinante comeca em 2-5) ficam intactos.
@@ -29,11 +61,11 @@ function canonicalizarCelularBR(num: string): string {
   return num;
 }
 
-// Envia direto para o `numero` recebido — que ja deve ser os DIGITOS PUROS do numero real do lead
-// (derivados no webhook a partir do remoteJidAlt/@s.whatsapp.net; ver routes/webhook.ts). Esse e o padrao
-// comprovado em producao no projeto irmao (winassistente, mesma Evolution): manda-se o numero EXATAMENTE
-// como o WhatsApp entregou, sem forcar o 9 e sem resolver via whatsappNumbers. Forcar o 9 / mandar para um
-// JID @lid era o que devolvia 201/PENDING e NUNCA entregava.
+// Envia para o `numero`/JID recebido EXATAMENTE como o webhook resolveu (ver routes/webhook.ts):
+//  - lead em LID addressing mode -> o JID `@lid` COMPLETO (com sufixo). E o unico destino que entrega para
+//    esses leads; mandar para o numero/@s.whatsapp.net devolve status ERROR e nunca chega.
+//  - contato salvo (sem LID) -> os digitos puros do numero real.
+// O Evolution aceita tanto digitos quanto um JID completo (`...@lid`, `...@s.whatsapp.net`) no campo `number`.
 export async function sendWhatsAppText(numero: string, texto: string): Promise<void> {
   if (!EVO_URL) {
     logger.warn('whatsapp: EVO_URL nao configurado, mensagem nao enviada', { numero });
@@ -45,7 +77,17 @@ export async function sendWhatsAppText(numero: string, texto: string): Promise<v
       headers: headers(),
       body: JSON.stringify({ number: numero, text: texto }),
     });
-    if (!r.ok) logger.error('whatsapp: sendText falhou', { status: r.status, body: await r.text(), numero });
+    const corpo = await r.text();
+    if (!r.ok) {
+      logger.error('whatsapp: sendText falhou', { status: r.status, body: corpo, numero });
+      return;
+    }
+    // O Evolution responde 2xx mesmo quando a ENTREGA falha (o status ERROR vem depois, via update). Logamos
+    // o status retornado para diagnostico: se vier ERROR, o destino (numero/JID) provavelmente esta errado.
+    try {
+      const j = JSON.parse(corpo) as { status?: string };
+      if (j?.status) logger.info('whatsapp: sendText enfileirado', { numero, status: j.status });
+    } catch { /* corpo nao-JSON: ignora */ }
   } catch (e) {
     logger.error('whatsapp: erro de rede no sendText', e);
   }

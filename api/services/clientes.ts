@@ -4,8 +4,9 @@ export interface Cliente {
   id: string;
   nome: string | null;
   telefone: string;
-  // Digitos puros do numero real do lead (derivados do remoteJidAlt no webhook). E o destino entregavel das
-  // respostas no Evolution. Pode ser null em cadastros antigos; nesse caso o envio cai no fallback por telefone.
+  // JID ROTEAVEL para entrega das respostas no Evolution (derivado no webhook). Para lead em LID addressing
+  // mode e o `@lid` completo (ex.: `178843210006771@lid`); para contato salvo sao os digitos puros do numero.
+  // Pode ser null em cadastros antigos; nesse caso o envio cai no fallback por telefone.
   whatsapp_jid: string | null;
   cidade: string | null;
   estado: string | null;

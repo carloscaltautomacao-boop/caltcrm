@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { waitUntil } from '@vercel/functions';
 import { logger } from '../lib/logger.ts';
-import { normalizarNumero } from '../services/whatsapp.ts';
 import { normalizarEntrada } from '../services/media.ts';
 import { obterOuCriarPorTelefone, salvarMensagem } from '../services/clientes.ts';
 import { processarComBuffer } from '../services/agente.ts';
-import { sendWhatsAppText } from '../services/whatsapp.ts';
+import { resolverEnderecos, sendWhatsAppText } from '../services/whatsapp.ts';
 
 export const webhookRouter = Router();
 
@@ -34,21 +33,12 @@ async function processarWebhook(body: any): Promise<void> {
     const key = data?.key;
     if (!key || key.fromMe) return; // ignora o que a propria conta enviou
 
-    // O numero REAL do lead vem no remoteJidAlt quando a conta e Business/LID-migrada (remoteJid vira `@lid`,
-    // um id opaco que NAO e telefone e NAO entrega). Preferimos sempre o `@s.whatsapp.net`. Padrao comprovado
-    // no projeto irmao (winassistente, mesma Evolution).
-    const remoteJid: string = key?.remoteJid || '';
-    const remoteJidAlt: string = data?.remoteJidAlt || key?.remoteJidAlt || '';
-    const phoneJid = remoteJidAlt.endsWith('@s.whatsapp.net') ? remoteJidAlt : remoteJid;
-
-    // IDENTIDADE (dedup): numero real canonicalizado (forca o 9) para nao partir o lead em dois cadastros.
-    const jidReal: string = data?.senderPn || key?.senderPn || phoneJid || '';
-    const telefone = normalizarNumero(jidReal);
+    // Lead de trafego pago quase sempre chega em "LID addressing mode": o WhatsApp entrega a mensagem com
+    // remoteJid = um id opaco terminando em `@lid` (NAO e telefone) e poe o numero real em remoteJidAlt
+    // (@s.whatsapp.net). `resolverEnderecos` decide o telefone (dedup) e o JID roteavel de entrega:
+    // para lead LID a resposta SO entrega no proprio `@lid`; responder no numero devolve status ERROR.
+    const { telefone, jidEntrega } = resolverEnderecos(key, data);
     if (!telefone) return;
-
-    // ENTREGA: os DIGITOS PUROS do numero real (sem @lid, sem forcar o 9). E o destino que de fato entrega no
-    // Evolution — mandar para o @lid ou para o numero com 9 forcado retorna 201/PENDING e nunca chega.
-    const jidEntrega = phoneJid.replace(/@s\.whatsapp\.net|@lid|@c\.us/g, '').replace(/\D/g, '') || undefined;
 
     const cliente = await obterOuCriarPorTelefone(telefone, jidEntrega);
     const entrada = await normalizarEntrada(data.message ?? {}, cliente.id);
