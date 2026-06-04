@@ -34,16 +34,21 @@ async function processarWebhook(body: any): Promise<void> {
     const key = data?.key;
     if (!key || key.fromMe) return; // ignora o que a propria conta enviou
 
-    // IDENTIDADE (dedup): prefira o numero real (senderPn) para nao partir o lead em dois cadastros.
-    const jidReal: string = data?.senderPn || key?.senderPn || key?.remoteJid || '';
+    // O numero REAL do lead vem no remoteJidAlt quando a conta e Business/LID-migrada (remoteJid vira `@lid`,
+    // um id opaco que NAO e telefone e NAO entrega). Preferimos sempre o `@s.whatsapp.net`. Padrao comprovado
+    // no projeto irmao (winassistente, mesma Evolution).
+    const remoteJid: string = key?.remoteJid || '';
+    const remoteJidAlt: string = data?.remoteJidAlt || key?.remoteJidAlt || '';
+    const phoneJid = remoteJidAlt.endsWith('@s.whatsapp.net') ? remoteJidAlt : remoteJid;
+
+    // IDENTIDADE (dedup): numero real canonicalizado (forca o 9) para nao partir o lead em dois cadastros.
+    const jidReal: string = data?.senderPn || key?.senderPn || phoneJid || '';
     const telefone = normalizarNumero(jidReal);
     if (!telefone) return;
 
-    // ENTREGA: o remoteJid EXATO em que o lead falou. Contas LID-migradas chegam como `...@lid` e SO recebem
-    // resposta nesse mesmo JID — responder pelo numero canonicalizado (@s.whatsapp.net) nao entrega. Guardamos
-    // o JID cru no cadastro para o envio usar o canal certo. Sem `@`, deixa o envio resolver pelo telefone.
-    const remoteJidCru: string = key?.remoteJid || '';
-    const jidEntrega = remoteJidCru.includes('@') ? remoteJidCru : undefined;
+    // ENTREGA: os DIGITOS PUROS do numero real (sem @lid, sem forcar o 9). E o destino que de fato entrega no
+    // Evolution — mandar para o @lid ou para o numero com 9 forcado retorna 201/PENDING e nunca chega.
+    const jidEntrega = phoneJid.replace(/@s\.whatsapp\.net|@lid|@c\.us/g, '').replace(/\D/g, '') || undefined;
 
     const cliente = await obterOuCriarPorTelefone(telefone, jidEntrega);
     const entrada = await normalizarEntrada(data.message ?? {}, cliente.id);

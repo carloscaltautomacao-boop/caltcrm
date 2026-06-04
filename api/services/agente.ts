@@ -246,8 +246,8 @@ async function acionarHumano(cliente: Cliente, motivo: string, resumo: string): 
 }
 
 async function responderLead(cliente: Cliente, texto: string): Promise<void> {
-  // Responde no JID EXATO em que o lead falou (whatsapp_jid; pode ser @lid). Sem ele (cadastro antigo),
-  // cai no telefone e o sendWhatsAppText resolve o numero entregavel. Contas LID so recebem pelo @lid.
+  // Responde nos digitos puros do numero real do lead (whatsapp_jid, gravado pelo webhook a partir do
+  // remoteJidAlt). Cadastro antigo sem jid cai no telefone canonicalizado (fallback).
   await sendWhatsAppText(cliente.whatsapp_jid || cliente.telefone, texto);
   await salvarMensagem(cliente.id, 'out', 'texto', texto, 'ia');
   await registrarPrimeiraRespostaSeNecessario(cliente.id);

@@ -29,63 +29,23 @@ function canonicalizarCelularBR(num: string): string {
   return num;
 }
 
-// Cache de numero -> JID entregavel (vive enquanto o processo serverless estiver quente). Evita uma chamada
-// extra ao WhatsApp a cada balao enviado para o mesmo lead.
-const cacheJid = new Map<string, string>();
-
-// Descobre o numero REAL entregavel perguntando ao proprio WhatsApp (endpoint whatsappNumbers).
-// Por que existe: o cadastro guarda o numero canonicalizado COM o 9 (canonicalizarCelularBR), mas muitos
-// numeros do Nordeste (DDD 86) tem o JID real SEM o 9. Enviar para o numero com 9 retorna 201/PENDING e
-// NUNCA entrega — e a propria Evolution erra essa sanitizacao (bug evolution-api #2062). Perguntar o JID
-// canonico ao WhatsApp e a unica forma confiavel. Best-effort: se algo falhar, devolve o numero original
-// (nao bloqueia o envio — no pior caso continua o comportamento antigo).
-async function resolverNumeroEntregavel(numero: string): Promise<string> {
-  if (!EVO_URL) return numero;
-  // Ja e um JID completo (ex.: ...@s.whatsapp.net ou ...@lid)? Entao e o endereco entregavel EXATO do chat —
-  // manda como veio. NAO resolve nem tira digitos: contas LID so recebem no proprio @lid, e o numero
-  // "canonicalizado" (com/sem 9) nunca entrega para elas. Esse e o caminho normal de resposta ao lead.
-  if (numero.includes('@')) return numero;
-  const emCache = cacheJid.get(numero);
-  if (emCache) return emCache;
-  try {
-    const r = await fetch(`${EVO_URL}/chat/whatsappNumbers/${EVO_INSTANCE}`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ numbers: [numero] }),
-    });
-    if (!r.ok) {
-      logger.warn('whatsapp: whatsappNumbers falhou, usando numero original', { numero, status: r.status });
-      return numero;
-    }
-    const arr = (await r.json()) as { exists?: boolean; jid?: string }[];
-    const item = arr?.[0];
-    if (item?.exists && item.jid) {
-      const real = item.jid.replace(/@s\.whatsapp\.net$/, '').replace(/\D/g, '') || numero;
-      if (real !== numero) logger.info('whatsapp: numero ajustado para o JID real', { de: numero, para: real });
-      cacheJid.set(numero, real);
-      return real;
-    }
-    logger.warn('whatsapp: numero sem conta WhatsApp valida, usando original', { numero });
-    return numero;
-  } catch (e) {
-    logger.error('whatsapp: erro ao resolver numero entregavel', e);
-    return numero;
-  }
-}
-
+// Envia direto para o `numero` recebido — que ja deve ser os DIGITOS PUROS do numero real do lead
+// (derivados no webhook a partir do remoteJidAlt/@s.whatsapp.net; ver routes/webhook.ts). Esse e o padrao
+// comprovado em producao no projeto irmao (winassistente, mesma Evolution): manda-se o numero EXATAMENTE
+// como o WhatsApp entregou, sem forcar o 9 e sem resolver via whatsappNumbers. Forcar o 9 / mandar para um
+// JID @lid era o que devolvia 201/PENDING e NUNCA entregava.
 export async function sendWhatsAppText(numero: string, texto: string): Promise<void> {
   if (!EVO_URL) {
     logger.warn('whatsapp: EVO_URL nao configurado, mensagem nao enviada', { numero });
     return;
   }
-  const destino = await resolverNumeroEntregavel(numero);
   try {
     const r = await fetch(`${EVO_URL}/message/sendText/${EVO_INSTANCE}`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ number: destino, text: texto }),
+      body: JSON.stringify({ number: numero, text: texto }),
     });
-    if (!r.ok) logger.error('whatsapp: sendText falhou', { status: r.status, body: await r.text(), destino });
+    if (!r.ok) logger.error('whatsapp: sendText falhou', { status: r.status, body: await r.text(), numero });
   } catch (e) {
     logger.error('whatsapp: erro de rede no sendText', e);
   }
@@ -93,12 +53,11 @@ export async function sendWhatsAppText(numero: string, texto: string): Promise<v
 
 export async function sendWhatsAppAudio(numero: string, audioUrl: string): Promise<void> {
   if (!EVO_URL || !audioUrl) return;
-  const destino = await resolverNumeroEntregavel(numero);
   try {
     const r = await fetch(`${EVO_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ number: destino, audio: audioUrl }),
+      body: JSON.stringify({ number: numero, audio: audioUrl }),
     });
     if (!r.ok) logger.error('whatsapp: sendAudio falhou', { status: r.status });
   } catch (e) {
