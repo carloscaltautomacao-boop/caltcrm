@@ -123,6 +123,40 @@ const DDL: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_handoffs_aberto ON handoffs (resolvido, criado_em)`,
 
+  // ----- Agenda / Calendario (eventos polimorficos) -----
+  // Espinha dorsal da aba Calendario: tudo que tem "quando" + "o que fazer" vira um evento.
+  //   tipo='tarefa'|'lembrete'      -> gestao manual (humano cria/atribui/conclui)
+  //   tipo='compromisso'            -> reuniao/prazo (ex.: data do "agendou_pagamento")
+  //   tipo='follow_up'              -> gerado pelo motor de reativacao (automatico=true)
+  // Datas em UTC (timestamptz); o front renderiza em America/Sao_Paulo. Ver services/agenda.ts.
+  `CREATE TABLE IF NOT EXISTS eventos (
+     id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+     cliente_id uuid REFERENCES clientes(id) ON DELETE CASCADE,
+     tipo text NOT NULL DEFAULT 'tarefa',
+     titulo text NOT NULL,
+     descricao text,
+     inicio timestamptz NOT NULL,
+     fim timestamptz,
+     dia_inteiro boolean NOT NULL DEFAULT false,
+     status text NOT NULL DEFAULT 'pendente',
+     canal text,
+     automatico boolean NOT NULL DEFAULT false,
+     toque int,
+     responsavel_id uuid REFERENCES users(id) ON DELETE SET NULL,
+     handoff_id uuid REFERENCES handoffs(id) ON DELETE SET NULL,
+     payload jsonb NOT NULL DEFAULT '{}',
+     concluido_em timestamptz,
+     criado_por uuid REFERENCES users(id) ON DELETE SET NULL,
+     criado_em timestamptz NOT NULL DEFAULT now(),
+     atualizado_em timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_eventos_inicio ON eventos (inicio)`,
+  `CREATE INDEX IF NOT EXISTS idx_eventos_status_inicio ON eventos (status, inicio)`,
+  `CREATE INDEX IF NOT EXISTS idx_eventos_cliente ON eventos (cliente_id, inicio)`,
+  // Garante NO MAXIMO 1 follow-up pendente por lead (idempotencia contra webhooks concorrentes).
+  `CREATE UNIQUE INDEX IF NOT EXISTS uniq_followup_pendente
+     ON eventos (cliente_id) WHERE tipo = 'follow_up' AND status = 'pendente'`,
+
   // ----- Tracking de custo de IA -----
   `CREATE TABLE IF NOT EXISTS ai_usage (
      id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -154,6 +188,9 @@ const CONFIG_PADRAO = {
   segmentos: ['auto', 'imovel', 'solar'],
   buffer_segundos: 8,
   follow_up_horas: 24,
+  follow_up_ativo: true,
+  follow_up_toques: [24, 24, 24], // intervalos em horas entre os toques da regua (3 toques: 24/48/72h)
+  reativacao_instrucao: '',
   custo_ia_teto_usd_mes: 0,
   handoff: {
     carlos: process.env.HANDOFF_WHATSAPP_CARLOS || '',

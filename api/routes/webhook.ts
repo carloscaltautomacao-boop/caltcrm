@@ -4,6 +4,7 @@ import { logger } from '../lib/logger.ts';
 import { normalizarEntrada } from '../services/media.ts';
 import { obterOuCriarPorTelefone, salvarMensagem } from '../services/clientes.ts';
 import { processarComBuffer } from '../services/agente.ts';
+import { cancelarFollowUpPendente } from '../services/agenda.ts';
 import { resolverEnderecos, resolverLidPorNumero, sendWhatsAppText } from '../services/whatsapp.ts';
 
 export const webhookRouter = Router();
@@ -57,6 +58,9 @@ async function processarWebhook(body: any): Promise<void> {
     if (!entrada.texto) return;
 
     const mensagemId = await salvarMensagem(cliente.id, 'in', entrada.tipo, entrada.texto, 'lead', key.id);
+
+    // Lead respondeu: esquentou. Cancela qualquer follow-up pendente (a regua reinicia quando a IA responder).
+    await cancelarFollowUpPendente(cliente.id);
 
     // Comandos slash utilitarios (pre-handlers antes do agente) — respondem na hora, sem buffer.
     if (entrada.texto.trim().toLowerCase() === '/status') {

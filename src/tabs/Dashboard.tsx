@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Users, UserCheck, TrendingUp, Timer, Banknote, Wallet, Target, Bot, AlertTriangle, type LucideIcon } from 'lucide-react';
+import { Users, UserCheck, TrendingUp, Timer, Banknote, Wallet, Target, Bot, AlertTriangle, CalendarClock, AlarmClock, BellRing, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api.ts';
 import { FUNIL_LABELS } from '../lib/funil.ts';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.tsx';
@@ -16,6 +16,9 @@ interface Kpis {
   porSegmento: { segmento: string; total: number }[];
   porOrigem: { origem: string; total: number }[];
   custoIaUsd: number;
+  agendaPendentes: number;
+  agendaAtrasados: number;
+  handoffsAbertos: number;
 }
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
@@ -70,6 +73,15 @@ export function Dashboard() {
         <Kpi titulo="Crédito fechado" valor={brl(kpis.creditoFechadoTotal)} Icon={Wallet} destaque />
         <Kpi titulo="% com perfil (≥ mín.)" valor={`${kpis.pctComPerfil}%`} Icon={Target} />
         <Kpi titulo="Custo de IA (mês)" valor={`US$ ${kpis.custoIaUsd.toFixed(2)}`} Icon={Bot} />
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Pendências da operação (agora)</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Kpi titulo="Tarefas pendentes" valor={String(kpis.agendaPendentes)} Icon={CalendarClock} />
+          <Kpi titulo="Tarefas atrasadas" valor={String(kpis.agendaAtrasados)} Icon={AlarmClock} destaque={kpis.agendaAtrasados > 0} />
+          <Kpi titulo="Handoffs em aberto" valor={String(kpis.handoffsAbertos)} Icon={BellRing} destaque={kpis.handoffsAbertos > 0} />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">

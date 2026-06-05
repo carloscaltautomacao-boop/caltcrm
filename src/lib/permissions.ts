@@ -9,6 +9,8 @@ export const PERMISSIONS = {
   PLANOS_VIEW: 'planos.view',
   PLANOS_EDIT: 'planos.edit',
   DASHBOARD_VIEW: 'dashboard.view',
+  AGENDA_VIEW: 'agenda.view',
+  AGENDA_EDIT: 'agenda.edit',
   CONFIG_VIEW: 'config.view',
   CONFIG_EDIT: 'config.edit',
   USERS_MANAGE: 'users.manage',

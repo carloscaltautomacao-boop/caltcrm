@@ -3,6 +3,7 @@ import { query } from '../db/pool.ts';
 import { requireAuth, requirePermission } from '../middleware/auth.ts';
 import { PERMISSIONS } from '../lib/permissions-list.ts';
 import { atualizarCliente, historicoMensagens, salvarMensagem } from '../services/clientes.ts';
+import { eventosDoCliente } from '../services/agenda.ts';
 import { sendWhatsAppText } from '../services/whatsapp.ts';
 
 export const clientesRouter = Router();
@@ -37,7 +38,8 @@ clientesRouter.get('/:id', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (
   );
   if (!rows[0]) { res.status(404).json({ erro: 'nao encontrado' }); return; }
   const mensagens = await historicoMensagens(req.params.id, 200);
-  res.json({ cliente: rows[0], mensagens });
+  const eventos = await eventosDoCliente(req.params.id);
+  res.json({ cliente: rows[0], mensagens, eventos });
 });
 
 clientesRouter.patch('/:id', requirePermission(PERMISSIONS.CLIENTES_EDIT), async (req, res) => {

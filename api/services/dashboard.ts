@@ -13,12 +13,16 @@ export interface DashboardKpis {
   porSegmento: { segmento: string; total: number }[];
   porOrigem: { origem: string; total: number }[];
   custoIaUsd: number;
+  // Pendencias "agora" (nao limitadas ao periodo) — trabalho em aberto na operacao.
+  agendaPendentes: number;
+  agendaAtrasados: number;
+  handoffsAbertos: number;
 }
 
 export async function calcularKpis(p: Periodo, creditoMinimo: number): Promise<DashboardKpis> {
   const params = [p.de, p.ate];
 
-  const [leads, ativos, tempo, creditos, perfil, etapas, segmentos, origens, custo] = await Promise.all([
+  const [leads, ativos, tempo, creditos, perfil, etapas, segmentos, origens, custo, agenda, handoffs] = await Promise.all([
     query<{ n: string }>(`SELECT count(*)::text n FROM clientes WHERE criado_em >= $1 AND criado_em < $2`, params),
     query<{ n: string }>(`SELECT count(*)::text n FROM clientes WHERE etapa = 'cliente_ativo' AND criado_em >= $1 AND criado_em < $2`, params),
     query<{ s: number | null }>(
@@ -48,6 +52,11 @@ export async function calcularKpis(p: Periodo, creditoMinimo: number): Promise<D
          FROM clientes WHERE criado_em >= $1 AND criado_em < $2 GROUP BY 1`, params),
     query<{ usd: string | null }>(
       `SELECT coalesce(sum(custo_usd), 0)::text usd FROM ai_usage WHERE criado_em >= $1 AND criado_em < $2`, params),
+    query<{ pendentes: string; atrasados: string }>(
+      `SELECT count(*)::text pendentes,
+              count(*) FILTER (WHERE inicio < now())::text atrasados
+         FROM eventos WHERE status = 'pendente'`),
+    query<{ n: string }>(`SELECT count(*)::text n FROM handoffs WHERE resolvido = false`),
   ]);
 
   const nLeads = Number(leads.rows[0]?.n ?? 0);
@@ -67,5 +76,8 @@ export async function calcularKpis(p: Periodo, creditoMinimo: number): Promise<D
     porSegmento: segmentos.rows.map((r) => ({ segmento: r.segmento, total: Number(r.total) })),
     porOrigem: origens.rows.map((r) => ({ origem: r.origem, total: Number(r.total) })),
     custoIaUsd: Number(custo.rows[0]?.usd ?? 0),
+    agendaPendentes: Number(agenda.rows[0]?.pendentes ?? 0),
+    agendaAtrasados: Number(agenda.rows[0]?.atrasados ?? 0),
+    handoffsAbertos: Number(handoffs.rows[0]?.n ?? 0),
   };
 }

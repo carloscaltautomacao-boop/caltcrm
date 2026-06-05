@@ -3,11 +3,13 @@ import cookieParser from 'cookie-parser';
 import { runMigrations } from './db/migrations.ts';
 import { logger } from './lib/logger.ts';
 import { webhookRouter } from './routes/webhook.ts';
+import { cronRouter } from './routes/cron.ts';
 import { authRouter } from './routes/auth.ts';
 import { usersRouter } from './routes/users.ts';
 import { clientesRouter } from './routes/clientes.ts';
 import { planosRouter } from './routes/planos.ts';
 import { dashboardRouter } from './routes/dashboard.ts';
+import { agendaRouter } from './routes/agenda.ts';
 import { configRouter } from './routes/config.ts';
 
 export const app = express();
@@ -25,14 +27,18 @@ app.use(async (_req, _res, next) => {
   try { await garantirMigrations(); next(); } catch (e) { next(e); }
 });
 
-// Webhook ANTES de qualquer middleware de auth (entrada publica do Evolution).
+// Entradas publicas ANTES de qualquer middleware de auth:
+// - webhook: o Evolution autentica com apikey proprio.
+// - cron: protegido por CRON_SECRET (a Vercel injeta o header nas chamadas de cron).
 app.use('/api/webhook', webhookRouter);
+app.use('/api/cron', cronRouter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/clientes', clientesRouter);
 app.use('/api/planos', planosRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/agenda', agendaRouter);
 app.use('/api/config', configRouter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

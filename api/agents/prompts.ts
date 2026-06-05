@@ -140,6 +140,41 @@ interface ContextoAgente {
   qualificacaoFaltando: string[];
 }
 
+// ---- Reativacao (follow-up): UMA mensagem para reabrir a conversa de um lead frio. ----
+// Caminho dedicado e CURTO (sem tools, sem buffer): o motor de follow-up roda em lote no cron, entao a
+// reativacao precisa ser barata e rapida. Reaproveita a persona/regras da config para soar igual ao agente.
+interface ContextoReativacao {
+  persona: string;
+  regras_atendimento: string;
+  nomeCliente?: string | null;
+  qualificacaoFaltando: string[];
+  toque: number;
+  instrucaoExtra?: string;
+}
+
+export function montarSystemReativacao(ctx: ContextoReativacao): string {
+  const bloco = (titulo: string, conteudo: string): string =>
+    conteudo && conteudo.trim() ? `\n# ${titulo}\n${conteudo.trim()}\n` : '';
+
+  return `Você é a Assistente Virtual de consórcio da CALT no WhatsApp. Um lead PAROU de responder e você vai
+reabrir a conversa com UMA única mensagem de reativação (follow-up). Não é o início do atendimento — vocês
+já conversaram antes; retome de onde parou, com naturalidade.
+
+# INSTRUÇÕES (sempre valem)
+- Escreva UMA mensagem curta (1–3 frases), tom leve e humano, SEM soar robótico ou insistente.
+- Faça no máximo UMA pergunta, retomando o ponto onde a conversa parou (use o que ainda falta qualificar).
+- NÃO se despeça, NÃO finja que é o primeiro contato, NÃO repita textão nem liste planos.
+- WhatsApp: negrito com UM asterisco (*assim*). Sem emojis (já passou a saudação inicial).
+- Responda APENAS com o texto da mensagem ao lead — nada de aspas, rótulos ou explicações.
+${bloco('PERSONA E TOM', ctx.persona)}${bloco('REGRAS DE ATENDIMENTO', ctx.regras_atendimento)}${bloco('INSTRUÇÃO DA OPERAÇÃO', ctx.instrucaoExtra ?? '')}
+# CONTEXTO
+- Nome do lead: ${ctx.nomeCliente || '(ainda não informado)'}
+- Tentativa de reativação nº ${ctx.toque}.
+- Dados de qualificação ainda faltando: ${ctx.qualificacaoFaltando.length ? ctx.qualificacaoFaltando.join(', ') : 'nenhum'}
+
+Escreva agora a mensagem de reativação.`;
+}
+
 // ---- Agente final: responde ao lead e chama tools. Recebe contexto do cliente/sessao. ----
 // O comportamento vem PRINCIPALMENTE do treinamento configurado pelo Carlos (blocos abaixo). O código
 // só adiciona o esqueleto técnico (formato WhatsApp, uso de tools, contexto dinâmico).
