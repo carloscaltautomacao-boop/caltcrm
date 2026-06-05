@@ -82,10 +82,6 @@ writeFileSync(
         { handle: 'filesystem' },
         { src: '/(.*)', dest: '/index.html' },
       ],
-      // Cron da regua de follow-up. No plano Hobby a Vercel so aceita schedule DIARIO (1x/dia, max 2 jobs):
-      // roda 1x e processa tudo que venceu. 13:00 UTC = 10:00 BRT (horario comercial). O endpoint
-      // (/api/cron/agenda) e protegido por CRON_SECRET — definir a env no painel da Vercel.
-      crons: [{ path: '/api/cron/agenda', schedule: '0 13 * * *' }],
     },
     null,
     2,

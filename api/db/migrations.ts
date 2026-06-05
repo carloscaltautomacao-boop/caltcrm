@@ -188,9 +188,6 @@ const CONFIG_PADRAO = {
   segmentos: ['auto', 'imovel', 'solar'],
   buffer_segundos: 8,
   follow_up_horas: 24,
-  follow_up_ativo: true,
-  follow_up_toques: [24, 24, 24], // intervalos em horas entre os toques da regua (3 toques: 24/48/72h)
-  reativacao_instrucao: '',
   custo_ia_teto_usd_mes: 0,
   handoff: {
     carlos: process.env.HANDOFF_WHATSAPP_CARLOS || '',

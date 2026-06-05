@@ -12,11 +12,7 @@ export interface ConfigAgente {
   buffer_segundos: number; // agrupa mensagens picadas do lead antes de responder (0 = desligado)
   dividir_mensagens: boolean; // quebra a resposta em varios baloes curtos em vez de um textao
   digitacao_humanizada: boolean; // mostra "digitando..." (delay do Evolution) antes de cada balao
-  follow_up_horas: number; // legado: semente do 1o toque (mantido por compat; a regua usa follow_up_toques)
-  // --- Follow-up automatico (reativacao de lead frio; motor em services/follow-up.ts) ---
-  follow_up_ativo: boolean; // liga/desliga a regua de reativacao
-  follow_up_toques: number[]; // intervalos em horas ENTRE toques consecutivos (ex.: [24,24,24] = 24/48/72h)
-  reativacao_instrucao: string; // instrucao extra injetada no prompt de reativacao (vazio = padrao)
+  follow_up_horas: number; // legado (follow-up automatico sera tratado por fora, via n8n)
   segmentos: string[];
   emojis_apenas_saudacao: boolean;
   nao_se_despedir: boolean;
@@ -36,9 +32,6 @@ const DEFAULTS: ConfigAgente = {
   dividir_mensagens: true,
   digitacao_humanizada: true,
   follow_up_horas: 24,
-  follow_up_ativo: true,
-  follow_up_toques: [24, 24, 24],
-  reativacao_instrucao: '',
   segmentos: ['auto', 'imovel', 'solar'],
   emojis_apenas_saudacao: true,
   nao_se_despedir: true,

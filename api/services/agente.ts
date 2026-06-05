@@ -18,7 +18,7 @@ import {
   textoEntradaDesdeUltimaSaida,
 } from './clientes.ts';
 import { buscarPlanosCompativeis, planosPorIds, formatarSimulacao } from './planos.ts';
-import { agendarFollowUpSeNecessario, criarTarefaHandoff, cancelarFollowUpPendente } from './agenda.ts';
+import { criarTarefaHandoff } from './agenda.ts';
 import { query } from '../db/pool.ts';
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -109,8 +109,6 @@ export async function processarMensagem(cliente: Cliente, textoEntrada: string):
     // Sem tool call -> resposta final ao lead.
     const texto = msg.content?.trim();
     if (texto) await responderLead(clienteAtual, texto);
-    // Agenda o 1o toque de follow-up se o lead ficar frio (so quando faz sentido: ver agenda.ts).
-    await agendarFollowUpSeNecessario(cliente.id);
     return;
   }
   logger.warn('agente: limite de rodadas de tool atingido', { clienteId: cliente.id });
@@ -241,8 +239,6 @@ async function acionarHumano(cliente: Cliente, motivo: string, resumo: string): 
   await query(`UPDATE sessoes SET status = 'humano' WHERE cliente_id = $1 AND status = 'ativa'`, [cliente.id]);
   // Handoff vira tarefa de fechamento na agenda (item acionavel para a equipe).
   await criarTarefaHandoff(cliente.id, rows[0]?.id ?? null, cliente.nome, resumo || motivo);
-  // Lead foi para o humano: nao precisa mais de follow-up automatico pendente.
-  await cancelarFollowUpPendente(cliente.id);
   // Notifica o Carlos no WhatsApp.
   const config = await getConfig();
   if (config.handoff.carlos) {

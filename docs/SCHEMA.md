@@ -44,19 +44,20 @@ cliente_id, motivo, destino (`carlos`/`rayane`/`suporte`), resolvido.
 modelo, origem (`extrator`/`agente`/`visao`/`audio`), tokens, custo_usd, cliente_id.
 
 ### `eventos` — agenda/calendário (espinha dorsal da aba Agenda)
-cliente_id (nullable), **tipo** (`tarefa`/`lembrete`/`compromisso`/`follow_up`), titulo, descricao,
-**inicio** (timestamptz UTC), fim, dia_inteiro, **status** (`pendente`/`concluido`/`cancelado`/`enviado`/`falhou`),
-canal (`whatsapp`/`ligacao`/`presencial`/`interno`), **automatico** (gerado pelo sistema vs humano),
-**toque** (nº na régua de follow-up), responsavel_id (→users), handoff_id (→handoffs), payload (jsonb),
-concluido_em, criado_por (→users; null = sistema), criado_em, atualizado_em.
+cliente_id (nullable), **tipo** (`tarefa`/`lembrete`/`compromisso`/`follow_up` — este último reservado p/ uso
+externo via n8n), titulo, descricao, **inicio** (timestamptz UTC), fim, dia_inteiro, **status**
+(`pendente`/`concluido`/`cancelado`/`enviado`/`falhou`), canal (`whatsapp`/`ligacao`/`presencial`/`interno`),
+**automatico** (gerado pelo sistema vs humano), toque, responsavel_id (→users), handoff_id (→handoffs),
+payload (jsonb), concluido_em, criado_por (→users; null = sistema), criado_em, atualizado_em.
 - Índice **parcial único** `uniq_followup_pendente (cliente_id) WHERE tipo='follow_up' AND status='pendente'`
-  garante no máximo 1 follow-up pendente por lead (idempotência contra webhooks concorrentes).
+  garante no máximo 1 follow-up pendente por lead.
 - Datas sempre UTC; renderização em `America/Sao_Paulo` no front (`src/lib/agenda.ts`).
+- Hoje o sistema só injeta evento via `criarTarefaHandoff` (handoff → tarefa). Demais eventos são manuais
+  (CRUD em `/api/agenda`); follow-up automático seria criado por fora (n8n) via a mesma API.
 
 ### `config` — linha única (singleton id=1)
 `dados` jsonb: persona/regras/roteiro/faq/base_conhecimento, buffer_segundos, dividir_mensagens,
-digitacao_humanizada, follow_up_horas (legado), **follow_up_ativo**, **follow_up_toques** (horas entre
-toques, ex.: [24,24,24]), **reativacao_instrucao**, custo_ia_teto_usd_mes, segmentos, handoff {carlos, rayane}.
+digitacao_humanizada, follow_up_horas (legado/inerte), custo_ia_teto_usd_mes, segmentos, handoff {carlos, rayane}.
 
 ## Funil (etapa)
 `novo` → `simulacao_enviada` · `indicacao` · `em_negociacao` · `agendou_pagamento` · `cliente_ativo` ·

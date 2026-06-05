@@ -18,9 +18,8 @@
 ## Pipeline técnico do webhook
 
 `POST /api/webhook/evolution` → responde 200 → normaliza mídia → obtém/cria cliente → salva mensagem `in`
-→ **cancela follow-up pendente** (lead esquentou) → pré-handler de slash (`/status`) → `processarMensagem`:
-extrator (JSON, temp 0) → persiste dados → agente (tools, até 4 rodadas) → responde e salva mensagem `out`
-→ **`agendarFollowUpSeNecessario`** (agenda o toque 1 se a qualificação seguir incompleta).
+→ pré-handler de slash (`/status`) → `processarMensagem`:
+extrator (JSON, temp 0) → persiste dados → agente (tools, até 4 rodadas) → responde e salva mensagem `out`.
 
 ## Onboarding / dados faltando
 
@@ -29,21 +28,14 @@ conversa para coletar o que falta antes de acionar o humano.
 
 ## Agenda / Calendário (aba)
 
-Tabela `eventos` polimórfica. O humano cria/edita `tarefa`/`lembrete`/`compromisso` (CRUD em
-`/api/agenda`), atribui responsável, conclui/cancela. O sistema também injeta eventos:
-- **Handoff** → ao `acionar_humano`, `criarTarefaHandoff` gera uma `tarefa` "Fechar com {lead}".
-- **Follow-up** → a régua cria/consome eventos `follow_up` (ver abaixo).
-Views: **Agenda** (lista por dia, atrasados em vermelho — default no mobile) e **Mês** (grid). Datas em UTC
-no banco, renderizadas em BRT.
+Tabela `eventos` polimórfica, focada em **gestão de tarefas manual**. O humano cria/edita
+`tarefa`/`lembrete`/`compromisso` (CRUD em `/api/agenda`), atribui responsável, conclui/cancela. O único
+evento que o sistema injeta hoje é o do **handoff**: ao `acionar_humano`, `criarTarefaHandoff` gera uma
+`tarefa` "Fechar com {lead}". Views: **Agenda** (lista por dia, atrasados em vermelho — default no mobile) e
+**Mês** (grid). Datas em UTC no banco, renderizadas em BRT.
 
-## Follow-up de leads frios (régua automática)
+## Follow-up de leads frios (externo — n8n)
 
-1. Ao fim de cada resposta da IA, se a qualificação segue incompleta (e o lead não está com humano nem em
-   etapa terminal), `agendarFollowUpSeNecessario` cria o **toque 1** em `now() + follow_up_toques[0]`.
-2. Se o lead responde antes, o webhook **cancela** o follow-up pendente e a régua reinicia no próximo turno.
-3. **Cron diário** (`/api/cron/agenda`, protegido por `CRON_SECRET`) chama `executarFollowUps`: para cada
-   follow-up vencido → revalida elegibilidade → `gerarReativacao` (1 chamada single-shot ao gpt-4.1, com a
-   persona da config) → envia no WhatsApp → marca `enviado` → **agenda o próximo toque**.
-4. Esgotada a régua (`follow_up_toques`), o lead vai para etapa `lead_frio` e a série encerra.
-
-Liga/desliga e configuração da régua (intervalos + instrução de reativação) na aba Configurações.
+O follow-up/reativação automática **não está no app** (decisão do Carlos): será orquestrado por fora, no
+**n8n**. O n8n pode ler o estado pelo banco/API, criar eventos na agenda via `POST /api/agenda` e disparar
+mensagens no WhatsApp por conta própria. Não há cron nem motor de reativação no código.

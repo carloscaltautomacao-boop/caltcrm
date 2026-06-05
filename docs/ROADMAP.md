@@ -10,10 +10,7 @@
 ## Fase 1 — Agenda e follow-up
 - [x] Aba **Agenda/Calendário** (tabela `eventos`): tarefas/lembretes/compromissos manuais + views mês/lista.
 - [x] Handoff vira **tarefa** na agenda (`criarTarefaHandoff`).
-- [x] **Régua de follow-up** configurável para leads frios (cron diário) + reativação contextual single-shot.
-- [x] Cancelamento/reinício da régua a cada engajamento do lead.
-- [ ] Gatilhos extras de reativação (ex.: simulação enviada sem retorno; aniversário do lead).
-- [ ] Granularidade fina do cron (hoje diário no Hobby) — disparador externo ou plano Pro.
+- [~] **Follow-up automático**: será feito por fora, no **n8n** (cron/motor removidos do app; ver DECISIONS D10).
 - [ ] Estado de `acao_pendente` para confirmações em curso.
 - [ ] Onboarding estrito (parser de nome rejeitando números/frases longas).
 

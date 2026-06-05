@@ -16,9 +16,6 @@ interface Config {
   dividir_mensagens: boolean;
   digitacao_humanizada: boolean;
   follow_up_horas: number;
-  follow_up_ativo: boolean;
-  follow_up_toques: number[];
-  reativacao_instrucao: string;
   handoff: { carlos: string; rayane: string };
 }
 
@@ -200,14 +197,10 @@ export function Configuracoes() {
   const { user } = useAuth();
   const podeEditar = pode(user, PERMISSIONS.CONFIG_EDIT);
   const [config, setConfig] = useState<Config | null>(null);
-  const [toquesTexto, setToquesTexto] = useState('');
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    api.get<{ config: Config }>('/config').then((r) => {
-      setConfig(r.config);
-      setToquesTexto((r.config.follow_up_toques ?? []).join(', '));
-    }).catch(() => {});
+    api.get<{ config: Config }>('/config').then((r) => setConfig(r.config)).catch(() => {});
   }, []);
 
   async function salvar() {
@@ -294,40 +287,6 @@ export function Configuracoes() {
             hint="Exibe o status de digitação com uma pausa natural antes de cada balão, como uma pessoa digitando."
             checked={config.digitacao_humanizada} disabled={!podeEditar}
             onChange={(v) => set({ digitacao_humanizada: v })}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Follow-up automático (reativação)</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <p className="rounded-md border border-input bg-muted/40 p-3 text-xs text-muted-foreground">
-            Quando um lead para de responder, a IA reabre a conversa com uma mensagem de reativação na régua
-            definida abaixo. No plano atual (Hobby), o disparo roda <span className="font-medium">1x por dia, por
-            volta das 10h</span> e processa tudo que venceu. Cada reativação aparece também na aba Agenda.
-          </p>
-          <CampoToggle
-            label="Ativar reativação automática de leads frios"
-            hint="Desligue para nunca enviar follow-up sozinho (a agenda manual continua funcionando)."
-            checked={config.follow_up_ativo} disabled={!podeEditar}
-            onChange={(v) => set({ follow_up_ativo: v })}
-          />
-          <Campo
-            label="Régua de toques (horas entre cada tentativa)"
-            hint="Lista separada por vírgula. Ex.: 24, 24, 24 = reativa em 24h, depois +24h e +24h (3 tentativas). Sem retorno após a última, o lead vira Lead Frio."
-          >
-            <Input value={toquesTexto} disabled={!podeEditar} placeholder="24, 24, 24"
-              onChange={(e) => {
-                setToquesTexto(e.target.value);
-                set({ follow_up_toques: e.target.value.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0) });
-              }} />
-          </Campo>
-          <CampoTexto
-            label="Instrução extra de reativação (opcional)"
-            hint="Orientação adicional só para as mensagens de follow-up (a persona e as regras gerais continuam valendo). Vazio = padrão."
-            value={config.reativacao_instrucao} rows={3} disabled={!podeEditar}
-            placeholder="Ex.: Seja breve e ofereça ajuda para terminar a simulação que ficou pela metade."
-            onChange={(v) => set({ reativacao_instrucao: v })}
           />
         </CardContent>
       </Card>

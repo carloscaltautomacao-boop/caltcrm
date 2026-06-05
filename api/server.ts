@@ -3,7 +3,6 @@ import cookieParser from 'cookie-parser';
 import { runMigrations } from './db/migrations.ts';
 import { logger } from './lib/logger.ts';
 import { webhookRouter } from './routes/webhook.ts';
-import { cronRouter } from './routes/cron.ts';
 import { authRouter } from './routes/auth.ts';
 import { usersRouter } from './routes/users.ts';
 import { clientesRouter } from './routes/clientes.ts';
@@ -27,11 +26,8 @@ app.use(async (_req, _res, next) => {
   try { await garantirMigrations(); next(); } catch (e) { next(e); }
 });
 
-// Entradas publicas ANTES de qualquer middleware de auth:
-// - webhook: o Evolution autentica com apikey proprio.
-// - cron: protegido por CRON_SECRET (a Vercel injeta o header nas chamadas de cron).
+// Webhook ANTES de qualquer middleware de auth (entrada publica do Evolution, autentica com apikey proprio).
 app.use('/api/webhook', webhookRouter);
-app.use('/api/cron', cronRouter);
 
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);

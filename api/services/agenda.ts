@@ -1,5 +1,4 @@
 import { query } from '../db/pool.ts';
-import { getConfig } from './config.ts';
 
 // Tipos de evento. tarefa/lembrete/compromisso sao manuais (humano); follow_up e gerado pelo motor.
 export type TipoEvento = 'tarefa' | 'lembrete' | 'compromisso' | 'follow_up';
@@ -33,9 +32,6 @@ export interface EventoView extends Evento {
   cliente_telefone: string | null;
   responsavel_nome: string | null;
 }
-
-// Etapas em que NAO faz sentido reativar (lead encerrado ou ja com humano/cliente).
-const ETAPAS_TERMINAIS = ['cliente_ativo', 'cliente_parceiro', 'cancelado', 'sem_perfil', 'lead_frio'];
 
 const SELECT_VIEW = `
   SELECT e.*, c.nome AS cliente_nome, c.telefone AS cliente_telefone, u.nome AS responsavel_nome
@@ -141,49 +137,7 @@ export async function excluirEvento(id: string): Promise<void> {
   await query('DELETE FROM eventos WHERE id = $1', [id]);
 }
 
-// ----- Scheduling do follow-up (usado pelo agente, webhook e motor de reativacao) -----
-
-// Cancela o follow-up pendente do lead (chamado quando ele responde: esquentou, regua reinicia).
-export async function cancelarFollowUpPendente(clienteId: string): Promise<void> {
-  await query(
-    `UPDATE eventos SET status = 'cancelado', atualizado_em = now()
-      WHERE cliente_id = $1 AND tipo = 'follow_up' AND status = 'pendente'`,
-    [clienteId],
-  );
-}
-
-// Insere um toque de follow-up (idempotente via indice parcial unico). horas = atraso a partir de agora.
-export async function agendarFollowUp(clienteId: string, toque: number, horas: number): Promise<void> {
-  await query(
-    `INSERT INTO eventos (cliente_id, tipo, titulo, inicio, status, canal, automatico, toque)
-     VALUES ($1, 'follow_up', $2, now() + ($3 || ' hours')::interval, 'pendente', 'whatsapp', true, $4)
-     ON CONFLICT (cliente_id) WHERE tipo = 'follow_up' AND status = 'pendente' DO NOTHING`,
-    [clienteId, `Reativação (toque ${toque})`, String(horas), toque],
-  );
-}
-
-// Agenda o 1o toque quando faz sentido (qualificacao incompleta, lead ativo, sem humano no chat).
-// Chamado pelo agente ao final de cada resposta ao lead.
-export async function agendarFollowUpSeNecessario(clienteId: string): Promise<void> {
-  const config = await getConfig();
-  if (!config.follow_up_ativo) return;
-  const toques = config.follow_up_toques;
-  if (!Array.isArray(toques) || toques.length === 0) return;
-
-  const { rows } = await query<{ etapa: string; qualificacao_completa: boolean; em_humano: boolean }>(
-    `SELECT c.etapa,
-            COALESCE(q.completa, false) AS qualificacao_completa,
-            EXISTS (SELECT 1 FROM sessoes s WHERE s.cliente_id = c.id AND s.status = 'humano') AS em_humano
-       FROM clientes c LEFT JOIN qualificacoes q ON q.cliente_id = c.id
-      WHERE c.id = $1`,
-    [clienteId],
-  );
-  const r = rows[0];
-  if (!r) return;
-  if (r.qualificacao_completa || r.em_humano || ETAPAS_TERMINAIS.includes(r.etapa)) return;
-
-  await agendarFollowUp(clienteId, 1, Number(toques[0]) || 24);
-}
+// ----- Integracao com handoff -----
 
 // Cria uma tarefa de fechamento a partir de um handoff (handoff vira item acionavel na agenda).
 export async function criarTarefaHandoff(
@@ -198,5 +152,3 @@ export async function criarTarefaHandoff(
     [clienteId, `Fechar com ${nome || 'lead qualificado'}`, resumo || null, handoffId],
   );
 }
-
-export { ETAPAS_TERMINAIS };
