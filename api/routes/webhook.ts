@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { waitUntil } from '@vercel/functions';
 import { logger } from '../lib/logger.ts';
 import { normalizarEntrada } from '../services/media.ts';
-import { obterOuCriarPorTelefone, salvarMensagem } from '../services/clientes.ts';
+import { obterOuCriarPorTelefone, salvarMensagem, zerarCliente } from '../services/clientes.ts';
 import { processarComBuffer } from '../services/agente.ts';
 import { resolverEnderecos, resolverLidPorNumero, sendWhatsAppText } from '../services/whatsapp.ts';
 
@@ -61,6 +61,17 @@ async function processarWebhook(body: any): Promise<void> {
     // Comandos slash utilitarios (pre-handlers antes do agente) — respondem na hora, sem buffer.
     if (entrada.texto.trim().toLowerCase() === '/status') {
       await sendWhatsAppText(cliente.whatsapp_jid || telefone, `Etapa atual: ${cliente.etapa}`);
+      return;
+    }
+
+    // Comando de TESTE: "#zerar" apaga o lead e TODO o historico (cascata) para reiniciar o atendimento
+    // do zero. So afeta os dados de quem enviou. sendWhatsAppText direto (nao responderLead) para nao
+    // regravar nada no banco logo apos a limpeza; o proximo contato recria o cliente como 'novo'.
+    if (entrada.texto.trim().toLowerCase() === '#zerar') {
+      const destino = cliente.whatsapp_jid || telefone;
+      await zerarCliente(cliente.id);
+      logger.info('webhook: #zerar — cliente e historico apagados', { clienteId: cliente.id });
+      await sendWhatsAppText(destino, 'Pronto! Apaguei seu histórico e zerei o atendimento. Manda uma nova mensagem pra começar do zero.');
       return;
     }
 

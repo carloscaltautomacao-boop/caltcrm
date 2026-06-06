@@ -43,6 +43,15 @@ export async function obterOuCriarPorTelefone(telefone: string, jid?: string): P
   return novo.rows[0]!;
 }
 
+// Apaga COMPLETAMENTE o lead e tudo que estiver ligado a ele. As tabelas dependentes (mensagens,
+// qualificacoes, simulacoes, sessoes, handoffs, eventos) caem por ON DELETE CASCADE no cliente_id;
+// ai_usage nao tem FK, entao limpamos a parte dele a mao. Usado pelo comando de TESTE "#zerar": apos
+// apagar, o proximo contato recria o cliente do zero como 'novo'. Idempotente (DELETE sem match e no-op).
+export async function zerarCliente(clienteId: string): Promise<void> {
+  await query('DELETE FROM ai_usage WHERE cliente_id = $1', [clienteId]);
+  await query('DELETE FROM clientes WHERE id = $1', [clienteId]);
+}
+
 // Atualiza apenas os campos informados (patch parcial), sempre tocando atualizado_em.
 export async function atualizarCliente(id: string, campos: Partial<Cliente>): Promise<void> {
   const permitidos: (keyof Cliente)[] = [
