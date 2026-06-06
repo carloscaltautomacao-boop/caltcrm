@@ -4,7 +4,7 @@
 //
 // Rodar: npx tsx scripts/aplicar-prompts-config.ts
 import '../api/load-env.ts'; // PRECISA ser o primeiro import (carrega .env antes do pool)
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync } from 'node:fs';
 import { query, pool } from '../api/db/pool.ts';
 import { updateConfig } from '../api/services/config.ts';
 import { TREINAMENTO_PADRAO } from '../api/agents/prompts.ts';
@@ -16,8 +16,12 @@ async function main(): Promise<void> {
   const { rows } = await query<{ dados: Record<string, unknown> }>('SELECT dados FROM config WHERE id = 1');
   const raw = rows[0]?.dados ?? {};
   const backupPath = 'scripts/config-backup-pre-prompts.json';
-  writeFileSync(backupPath, JSON.stringify(raw, null, 2), 'utf8');
-  console.log(`[backup] dados atuais salvos em ${backupPath}`);
+  if (existsSync(backupPath)) {
+    console.log(`[backup] ${backupPath} já existe — mantido (preserva o estado original).`);
+  } else {
+    writeFileSync(backupPath, JSON.stringify(raw, null, 2), 'utf8');
+    console.log(`[backup] dados atuais salvos em ${backupPath}`);
+  }
 
   const presentes = TRAINING_KEYS.filter((k) => typeof raw[k] === 'string' && (raw[k] as string).trim() !== '');
   console.log(`[antes] blocos de treinamento ja gravados no banco: ${presentes.length ? presentes.join(', ') : '(nenhum — usava o padrao do codigo)'}`);
