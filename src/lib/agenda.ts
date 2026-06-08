@@ -1,7 +1,7 @@
 // Tipos + helpers da aba Calendario. Espelha api/services/agenda.ts.
 // Datas vem em UTC (ISO) do backend; aqui renderizamos em America/Sao_Paulo (BRT).
 
-export type TipoEvento = 'tarefa' | 'lembrete' | 'compromisso' | 'follow_up';
+export type TipoEvento = 'tarefa' | 'lembrete' | 'compromisso' | 'follow_up' | 'mensagem';
 export type StatusEvento = 'pendente' | 'concluido' | 'cancelado' | 'enviado' | 'falhou';
 
 export interface Evento {
@@ -37,6 +37,7 @@ export const TIPO_LABELS: Record<TipoEvento, string> = {
   lembrete: 'Lembrete',
   compromisso: 'Compromisso',
   follow_up: 'Follow-up',
+  mensagem: 'Msg. agendada',
 };
 
 // Tipos que o humano pode criar pela UI (follow_up é gerado só pelo motor de reativação).
@@ -56,6 +57,7 @@ export const TIPO_COR: Record<TipoEvento, string> = {
   lembrete: 'bg-amber-500',
   compromisso: 'bg-violet-500',
   follow_up: 'bg-sky-500',
+  mensagem: 'bg-emerald-500',
 };
 
 export const CANAIS: { valor: string; label: string }[] = [

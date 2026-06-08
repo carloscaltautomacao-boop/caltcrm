@@ -157,6 +157,17 @@ const DDL: string[] = [
   `CREATE UNIQUE INDEX IF NOT EXISTS uniq_followup_pendente
      ON eventos (cliente_id) WHERE tipo = 'follow_up' AND status = 'pendente'`,
 
+  // ----- Anotacoes (notas livres sobre o lead, criadas no chat) -----
+  // Texto curto sem "quando" (diferente de eventos). Aparece no painel de anotacoes do chat.
+  `CREATE TABLE IF NOT EXISTS anotacoes (
+     id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+     cliente_id uuid NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+     texto text NOT NULL,
+     criado_por uuid REFERENCES users(id) ON DELETE SET NULL,
+     criado_em timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_anotacoes_cliente ON anotacoes (cliente_id, criado_em DESC)`,
+
   // ----- Tracking de custo de IA -----
   `CREATE TABLE IF NOT EXISTS ai_usage (
      id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -1,5 +1,10 @@
 import { query } from '../db/pool.ts';
-import { TREINAMENTO_PADRAO } from '../agents/prompts.ts';
+import {
+  TREINAMENTO_PADRAO,
+  TABELA_CREDITOS_PADRAO,
+  TABELA_PRAZO_MESES_PADRAO,
+  type LinhaCredito,
+} from '../agents/prompts.ts';
 
 export interface ConfigAgente {
   // --- Treinamento da IA (fonte PRINCIPAL do comportamento; editável na aba Configurações) ---
@@ -8,6 +13,9 @@ export interface ConfigAgente {
   roteiro_atendimento: string;
   faq: string;
   base_conhecimento: string;
+  // --- Tabela de créditos (referência única de crédito/parcela/lance; editável na aba Configurações) ---
+  tabela_creditos: LinhaCredito[];
+  tabela_prazo_meses: number;
   // --- Operacional ---
   buffer_segundos: number; // agrupa mensagens picadas do lead antes de responder (0 = desligado)
   dividir_mensagens: boolean; // quebra a resposta em varios baloes curtos em vez de um textao
@@ -28,6 +36,8 @@ const DEFAULTS: ConfigAgente = {
   roteiro_atendimento: TREINAMENTO_PADRAO.roteiro_atendimento,
   faq: TREINAMENTO_PADRAO.faq,
   base_conhecimento: TREINAMENTO_PADRAO.base_conhecimento,
+  tabela_creditos: TABELA_CREDITOS_PADRAO,
+  tabela_prazo_meses: TABELA_PRAZO_MESES_PADRAO,
   buffer_segundos: 8,
   dividir_mensagens: true,
   digitacao_humanizada: true,

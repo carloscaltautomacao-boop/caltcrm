@@ -10,6 +10,7 @@ import { Card } from '../components/ui/card.tsx';
 import { Button } from '../components/ui/button.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Badge } from '../components/ui/badge.tsx';
+import { Overlay } from '../components/ui/overlay.tsx';
 import type { Cliente } from '../lib/funil.ts';
 import {
   type Evento, type Responsavel, type TipoEvento, type StatusEvento,
@@ -120,7 +121,7 @@ export function Calendario() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className={CLASSE_SELECT}>
             <option value="">Todos os tipos</option>
-            {(['tarefa', 'lembrete', 'compromisso', 'follow_up'] as TipoEvento[]).map((t) => (
+            {(['tarefa', 'lembrete', 'compromisso', 'follow_up', 'mensagem'] as TipoEvento[]).map((t) => (
               <option key={t} value={t}>{TIPO_LABELS[t]}</option>
             ))}
           </select>
@@ -470,20 +471,6 @@ function SeletorCliente({ valor, onSelecionar }: {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// Overlay/modal simples (sem dependência externa).
-function Overlay({ children, onFechar }: { children: React.ReactNode; onFechar: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onFechar}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-lg overflow-auto rounded-t-2xl border border-border bg-card p-5 shadow-xl sm:rounded-2xl"
-      >
-        {children}
-      </div>
     </div>
   );
 }

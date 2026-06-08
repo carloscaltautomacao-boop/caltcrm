@@ -57,6 +57,8 @@ Variáveis em `.env` (modelo em `.env.example`): `OPENAI_API_KEY`, `DATABASE_URL
 | Clientes/qualificação                  | `api/services/clientes.ts` + `api/routes/clientes.ts`  |
 | Dashboard (BI)                         | `api/services/dashboard.ts` + `api/routes/dashboard.ts`|
 | Agenda/Calendário (eventos, CRUD)      | `api/services/agenda.ts` + `api/routes/agenda.ts` + `src/tabs/Calendario.tsx` |
+| Anotações do lead                       | `api/services/anotacoes.ts` + rotas `/clientes/:id/anotacoes` em `api/routes/clientes.ts` |
+| Ações no chat (anotação/lembrete/msg)   | `src/components/chat/AcoesLead.tsx` (no header de `src/tabs/Chat.tsx`)        |
 | Config do agente / handoff             | `api/services/config.ts` + `api/routes/config.ts`      |
 | Wrapper de IA + custo (`ai_usage`)     | `api/lib/ai.ts` + `api/lib/openai.ts`                  |
 | Auth (bcrypt, JWT, permissões)         | `api/lib/auth.ts` + `api/middleware/auth.ts` + `api/lib/permissions-list.ts` |
@@ -102,9 +104,17 @@ Variáveis em `.env` (modelo em `.env.example`): `OPENAI_API_KEY`, `DATABASE_URL
 - `remoteJid` pode vir `@lid` em contas Business; o webhook prefere `senderPn` (número real) quando existe.
 - Falha no tracking de `ai_usage` **não derruba** o atendimento (best-effort).
 - **Agenda = uma tabela `eventos` polimórfica** (`tarefa`/`lembrete`/`compromisso` manuais + `follow_up`,
-  reservado). Handoff vira uma `tarefa` na agenda (`criarTarefaHandoff`). Índice **parcial único**
-  `uniq_followup_pendente` garante no máx. 1 follow-up pendente por lead (caso o follow-up venha a criar tais
-  eventos via API). A aba é **gestão de tarefas manual** + os itens que o sistema injeta (hoje, só handoff).
+  reservado + `mensagem`, ver abaixo). Handoff vira uma `tarefa` na agenda (`criarTarefaHandoff`). Índice
+  **parcial único** `uniq_followup_pendente` garante no máx. 1 follow-up pendente por lead (caso o follow-up
+  venha a criar tais eventos via API). A aba é **gestão de tarefas manual** + os itens que o sistema injeta
+  (handoff) + os criados pelo chat (lembrete/mensagem). `tipo` é `text` livre (sem CHECK), então novos tipos
+  não exigem migration na tabela `eventos`.
+- **Mensagem agendada (`tipo='mensagem'`)** é criada no chat (`AcoesLead`) e o app **só salva** — não há
+  cron. O envio é do **n8n**: lê `GET /api/agenda?tipo=mensagem&status=pendente&ate=<agora>`, manda o
+  WhatsApp pro `cliente_telefone` com o texto em `descricao`, e marca `POST /api/agenda/:id/status`
+  (`enviado`/`falhou`). `canal='whatsapp'`. (n8n precisa de credencial pra API — a agenda exige JWT.)
+- **Anotações do lead** = tabela `anotacoes` (nota livre, sem "quando"; diferente de `eventos`). Criadas no
+  chat (`AcoesLead` → ícone Anotações); leitura exige `chat.view`, escrita `chat.send`.
 - **Datas da agenda em UTC** no banco (timestamptz); o front renderiza em `America/Sao_Paulo` (offset fixo
   `-03:00`, Brasil sem horário de verão). Ver helpers em `src/lib/agenda.ts`.
 - **Follow-up automático NÃO está no app** — será tocado por fora, via **n8n** (decisão do Carlos). O n8n
@@ -131,7 +141,9 @@ responder; `config.buffer_segundos`, padrão 8s; `processarComBuffer` em `agente
 (divide o textão em balões curtos com "digitando..." entre eles; uma pergunta por vez; `dividir_mensagens` e
 `digitacao_humanizada` em Configurações) · comandos slash (`/status`) · **PWA instalável** (mobile-first) ·
 **Agenda/Calendário** (aba para gerir tarefas/lembretes/compromissos manuais + visão mês e lista; eventos
-ligados ao lead; handoff vira tarefa automaticamente; `services/agenda.ts` + `tabs/Calendario.tsx`).
+ligados ao lead; handoff vira tarefa automaticamente; `services/agenda.ts` + `tabs/Calendario.tsx`) ·
+**ações no chat** (`AcoesLead`: anotações no lead, criar lembrete/evento e agendar mensagem de WhatsApp —
+tudo vinculado ao lead e visível na Agenda; a mensagem agendada é enviada por fora via n8n).
 **Desligados:** PDF, geração de imagem, **áudio explicativo pré-gravado** (removido), **follow-up automático**
 (será feito por fora via **n8n** — sem cron/motor no app). Agendamento foi re-habilitado como a aba Agenda.
 

@@ -1,7 +1,11 @@
 import { query } from '../db/pool.ts';
 
 // Tipos de evento. tarefa/lembrete/compromisso sao manuais (humano); follow_up e gerado pelo motor.
-export type TipoEvento = 'tarefa' | 'lembrete' | 'compromisso' | 'follow_up';
+// 'mensagem' = WhatsApp agendado criado no chat: o app SO salva (status='pendente', canal='whatsapp',
+//   descricao=texto a enviar); quem dispara e o n8n (le `GET /api/agenda?tipo=mensagem&status=pendente`
+//   com `ate=<agora>`, envia pelo telefone do lead e marca `POST /api/agenda/:id/status` enviado/falhou).
+//   Nao ha cron no app (decisao do CLAUDE.md) — o envio acontece por fora.
+export type TipoEvento = 'tarefa' | 'lembrete' | 'compromisso' | 'follow_up' | 'mensagem';
 export type StatusEvento = 'pendente' | 'concluido' | 'cancelado' | 'enviado' | 'falhou';
 
 export interface Evento {

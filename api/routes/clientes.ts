@@ -4,6 +4,7 @@ import { requireAuth, requirePermission } from '../middleware/auth.ts';
 import { PERMISSIONS } from '../lib/permissions-list.ts';
 import { atualizarCliente, historicoMensagens, salvarMensagem } from '../services/clientes.ts';
 import { eventosDoCliente } from '../services/agenda.ts';
+import { listarAnotacoes, criarAnotacao, excluirAnotacao } from '../services/anotacoes.ts';
 import { sendWhatsAppText } from '../services/whatsapp.ts';
 
 export const clientesRouter = Router();
@@ -71,5 +72,24 @@ clientesRouter.post('/:id/mensagem', requirePermission(PERMISSIONS.CHAT_SEND), a
 
 clientesRouter.delete('/:id', requirePermission(PERMISSIONS.CLIENTES_DELETE), async (req, res) => {
   await query('DELETE FROM clientes WHERE id = $1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// ----- Anotacoes do lead (notas livres no chat) -----
+
+clientesRouter.get('/:id/anotacoes', requirePermission(PERMISSIONS.CHAT_VIEW), async (req, res) => {
+  const anotacoes = await listarAnotacoes(req.params.id);
+  res.json({ anotacoes });
+});
+
+clientesRouter.post('/:id/anotacoes', requirePermission(PERMISSIONS.CHAT_SEND), async (req, res) => {
+  const texto = (req.body?.texto ?? '').trim();
+  if (!texto) { res.status(400).json({ erro: 'texto obrigatorio' }); return; }
+  const anotacao = await criarAnotacao(req.params.id, texto, req.user!.sub);
+  res.status(201).json({ anotacao });
+});
+
+clientesRouter.delete('/:id/anotacoes/:notaId', requirePermission(PERMISSIONS.CHAT_SEND), async (req, res) => {
+  await excluirAnotacao(req.params.notaId, req.params.id);
   res.json({ ok: true });
 });

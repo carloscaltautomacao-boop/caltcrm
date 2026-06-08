@@ -7,6 +7,7 @@ import { pode, PERMISSIONS } from '../lib/permissions.ts';
 import { Card } from '../components/ui/card.tsx';
 import { Input } from '../components/ui/input.tsx';
 import { Button } from '../components/ui/button.tsx';
+import { AcoesLead } from '../components/chat/AcoesLead.tsx';
 import { cn } from '../lib/cn.ts';
 
 interface Mensagem { direcao: string; conteudo: string | null }
@@ -91,6 +92,9 @@ export function Chat() {
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{contato?.nome || contato?.telefone}</div>
                 <div className="truncate text-xs text-muted-foreground">{contato?.cidade || '—'}</div>
+              </div>
+              <div className="ml-auto shrink-0">
+                <AcoesLead clienteId={selecionado} nome={contato?.nome || contato?.telefone || 'lead'} />
               </div>
             </div>
 

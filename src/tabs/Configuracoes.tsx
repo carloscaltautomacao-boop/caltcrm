@@ -6,12 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card.
 import { Input } from '../components/ui/input.tsx';
 import { Button } from '../components/ui/button.tsx';
 
+interface LinhaCredito {
+  credito: number;
+  parcela: number;
+  lance_minimo: number;
+}
+
 interface Config {
   persona: string;
   regras_atendimento: string;
   roteiro_atendimento: string;
   faq: string;
   base_conhecimento: string;
+  tabela_creditos: LinhaCredito[];
+  tabela_prazo_meses: number;
   buffer_segundos: number;
   dividir_mensagens: boolean;
   digitacao_humanizada: boolean;
@@ -193,6 +201,89 @@ function ConexaoWhatsApp({ podeEditar }: { podeEditar: boolean }) {
   );
 }
 
+function CartaoTabelaCreditos({
+  linhas, prazoMeses, disabled, onLinhas, onPrazo,
+}: {
+  linhas: LinhaCredito[];
+  prazoMeses: number;
+  disabled: boolean;
+  onLinhas: (v: LinhaCredito[]) => void;
+  onPrazo: (v: number) => void;
+}) {
+  const atualizar = (i: number, patch: Partial<LinhaCredito>) =>
+    onLinhas(linhas.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const remover = (i: number) => onLinhas(linhas.filter((_, idx) => idx !== i));
+  const adicionar = () => onLinhas([...linhas, { credito: 0, parcela: 0, lance_minimo: 0 }]);
+  const recalcularLances = () => onLinhas(linhas.map((l) => ({ ...l, lance_minimo: Math.round(l.credito * 0.3) })));
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Tabela de créditos</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <p className="rounded-md border border-input bg-muted/40 p-3 text-xs text-muted-foreground">
+          Esta é a <span className="font-medium">referência oficial</span> de crédito, parcela e lance mínimo. A IA
+          cita SÓ estes valores — nunca inventa nem oferece fora desta tabela. Edite aqui e salve; o atendimento passa
+          a usar na hora.
+        </p>
+
+        <Campo label="Prazo padrão (meses)" hint="Vale para todas as faixas (a tabela atual é toda em 96 meses).">
+          <Input type="number" min={1} value={prazoMeses} disabled={disabled}
+            onChange={(e) => onPrazo(Number(e.target.value))} className="sm:max-w-[12rem]" />
+        </Campo>
+
+        <div className="space-y-2">
+          <div className="hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid sm:grid-cols-[1fr_1fr_1fr_auto]">
+            <span>Crédito (R$)</span>
+            <span>Parcela (R$)</span>
+            <span>Lance mín. (R$)</span>
+            <span className="w-9" />
+          </div>
+          {linhas.map((l, i) => (
+            <div
+              key={i}
+              className="grid grid-cols-1 gap-2 rounded-md border border-input p-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center sm:border-0 sm:p-0"
+            >
+              <label className="space-y-1 sm:space-y-0">
+                <span className="text-xs text-muted-foreground sm:hidden">Crédito (R$)</span>
+                <Input type="number" min={0} step={100} value={l.credito} disabled={disabled}
+                  onChange={(e) => atualizar(i, { credito: Number(e.target.value) })} />
+              </label>
+              <label className="space-y-1 sm:space-y-0">
+                <span className="text-xs text-muted-foreground sm:hidden">Parcela (R$)</span>
+                <Input type="number" min={0} step={0.01} value={l.parcela} disabled={disabled}
+                  onChange={(e) => atualizar(i, { parcela: Number(e.target.value) })} />
+              </label>
+              <label className="space-y-1 sm:space-y-0">
+                <span className="text-xs text-muted-foreground sm:hidden">Lance mín. (R$)</span>
+                <Input type="number" min={0} step={100} value={l.lance_minimo} disabled={disabled}
+                  onChange={(e) => atualizar(i, { lance_minimo: Number(e.target.value) })} />
+              </label>
+              <Button
+                type="button" variant="outline" disabled={disabled} onClick={() => remover(i)}
+                className="w-full sm:h-9 sm:w-9 sm:px-0" aria-label="Remover linha"
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+          {linhas.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhuma faixa cadastrada. Adicione ao menos uma.</p>
+          )}
+        </div>
+
+        {!disabled && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={adicionar} className="w-full sm:w-auto">Adicionar linha</Button>
+            <Button type="button" variant="outline" onClick={recalcularLances} className="w-full sm:w-auto">
+              Recalcular lances (30%)
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Configuracoes() {
   const { user } = useAuth();
   const podeEditar = pode(user, PERMISSIONS.CONFIG_EDIT);
@@ -265,6 +356,14 @@ export function Configuracoes() {
           />
         </CardContent>
       </Card>
+
+      <CartaoTabelaCreditos
+        linhas={config.tabela_creditos ?? []}
+        prazoMeses={config.tabela_prazo_meses ?? 96}
+        disabled={!podeEditar}
+        onLinhas={(v) => set({ tabela_creditos: v })}
+        onPrazo={(v) => set({ tabela_prazo_meses: v })}
+      />
 
       <Card>
         <CardHeader><CardTitle>Atendimento</CardTitle></CardHeader>

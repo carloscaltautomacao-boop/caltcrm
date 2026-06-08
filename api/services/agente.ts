@@ -77,6 +77,8 @@ export async function processarMensagem(cliente: Cliente, textoEntrada: string):
       faq: config.faq,
       base_conhecimento: config.base_conhecimento,
     },
+    tabelaCreditos: config.tabela_creditos,
+    prazoMeses: config.tabela_prazo_meses,
     nomeCliente: clienteAtual.nome,
     etapaAtual: clienteAtual.etapa,
     qualificacaoFaltando: faltando,
