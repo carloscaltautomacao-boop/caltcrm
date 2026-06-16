@@ -35,7 +35,18 @@ export function App() {
   const [ativa, setAtiva] = useState('dashboard');
 
   if (carregando) {
-    return <div className="flex min-h-screen items-center justify-center text-muted-foreground">Carregando...</div>;
+    return (
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background">
+        <div className="flex h-16 w-16 animate-rise items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-black/5">
+          <img src="/logo-calt.jpeg" alt="CALT" className="h-full w-full object-contain" />
+        </div>
+        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.2s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.1s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />
+        </div>
+      </div>
+    );
   }
   if (!user) return <LoginScreen />;
 

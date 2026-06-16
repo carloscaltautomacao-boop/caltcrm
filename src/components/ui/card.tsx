@@ -1,10 +1,31 @@
 import type { HTMLAttributes } from 'react';
 import { cn } from '../../lib/cn.ts';
 
-export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+type Variant = 'default' | 'soft' | 'brand';
+
+const variants: Record<Variant, string> = {
+  // Card padrão: branco quente, borda fina, sombra quente suave
+  default: 'border border-border bg-card text-card-foreground shadow-sm',
+  // Realce discreto da marca (lavada de coral)
+  soft: 'border border-border bg-brand-soft text-card-foreground shadow-sm',
+  // Hero: gradiente coral, texto claro — para o número principal (patrimônio)
+  brand: 'border border-transparent bg-brand text-primary-foreground shadow-[var(--shadow-glow)]',
+};
+
+interface CardProps extends HTMLAttributes<HTMLDivElement> {
+  variant?: Variant;
+  interactive?: boolean;
+}
+
+export function Card({ className, variant = 'default', interactive = false, ...props }: CardProps) {
   return (
     <div
-      className={cn('rounded-xl border border-border bg-card text-card-foreground shadow-sm', className)}
+      className={cn(
+        'rounded-xl',
+        variants[variant],
+        interactive && 'transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+        className,
+      )}
       {...props}
     />
   );
