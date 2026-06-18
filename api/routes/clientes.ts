@@ -6,14 +6,13 @@ import { atualizarCliente, historicoMensagens, salvarMensagem } from '../service
 import { eventosDoCliente } from '../services/agenda.ts';
 import { listarAnotacoes, criarAnotacao, excluirAnotacao } from '../services/anotacoes.ts';
 import { getConfig, updateConfig } from '../services/config.ts';
-import { sendWhatsAppMedia, sendWhatsAppText, type WhatsAppMedia } from '../services/whatsapp.ts';
+import { sendWhatsAppAudio, sendWhatsAppMedia, sendWhatsAppText, type WhatsAppMedia } from '../services/whatsapp.ts';
 
 export const clientesRouter = Router();
 clientesRouter.use(requireAuth);
 
 function mediatypeDe(mimetype: string, tipo?: string): WhatsAppMedia['mediatype'] {
   if (tipo === 'documento') return 'document';
-  if (tipo === 'audio' || mimetype.startsWith('audio/')) return 'audio';
   if (mimetype.startsWith('image/')) return 'image';
   if (mimetype.startsWith('video/')) return 'video';
   return 'document';
@@ -138,12 +137,22 @@ clientesRouter.post('/:id/midia', requirePermission(PERMISSIONS.CHAT_SEND), asyn
   const mediatype = mediatypeDe(String(mimetype), String(tipo || ''));
   const nomeArquivo = String(fileName || `arquivo-${Date.now()}`);
   const legenda = String(caption || '').trim();
-  await sendWhatsAppMedia(rows[0].whatsapp_jid || rows[0].telefone, {
+  const destino = rows[0].whatsapp_jid || rows[0].telefone;
+  const media = limparBase64(String(mediaBase64));
+
+  if (String(tipo) === 'audio' || String(mimetype).startsWith('audio/')) {
+    await sendWhatsAppAudio(destino, media);
+    await salvarMensagem(req.params.id, 'out', 'audio', nomeArquivo, 'humano');
+    res.json({ ok: true });
+    return;
+  }
+
+  await sendWhatsAppMedia(destino, {
     mediatype,
     mimetype: String(mimetype),
-    media: limparBase64(String(mediaBase64)),
+    media,
     fileName: nomeArquivo,
-    caption: legenda || undefined,
+    caption: legenda || '',
   });
   await salvarMensagem(req.params.id, 'out', mediatype === 'image' ? 'imagem' : mediatype, legenda || nomeArquivo, 'humano');
   res.json({ ok: true });

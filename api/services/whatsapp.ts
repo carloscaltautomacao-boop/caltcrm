@@ -163,22 +163,27 @@ export async function sendWhatsAppText(numero: string, texto: string, delayMs = 
   }
 }
 
-export async function sendWhatsAppAudio(numero: string, audioUrl: string): Promise<void> {
-  if (!EVO_URL || !audioUrl) return;
+export async function sendWhatsAppAudio(numero: string, audio: string, delayMs = 0): Promise<void> {
+  if (!EVO_URL || !audio) return;
   try {
     const r = await fetch(`${EVO_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
       method: 'POST',
       headers: headers(),
-      body: JSON.stringify({ number: numero, audio: audioUrl }),
+      body: JSON.stringify({ number: numero, audio, ...(delayMs > 0 ? { delay: delayMs } : {}) }),
     });
-    if (!r.ok) logger.error('whatsapp: sendAudio falhou', { status: r.status });
+    const corpo = await r.text();
+    if (!r.ok) {
+      logger.error('whatsapp: sendAudio falhou', { status: r.status, body: corpo, numero });
+      throw new Error(`sendAudio falhou (${r.status})`);
+    }
   } catch (e) {
     logger.error('whatsapp: erro de rede no sendAudio', e);
+    throw e;
   }
 }
 
 export interface WhatsAppMedia {
-  mediatype: 'image' | 'video' | 'audio' | 'document';
+  mediatype: 'image' | 'video' | 'document';
   mimetype: string;
   media: string;
   fileName?: string;
@@ -201,9 +206,13 @@ export async function sendWhatsAppMedia(numero: string, midia: WhatsAppMedia): P
       }),
     });
     const corpo = await r.text();
-    if (!r.ok) logger.error('whatsapp: sendMedia falhou', { status: r.status, body: corpo, numero, mediatype: midia.mediatype });
+    if (!r.ok) {
+      logger.error('whatsapp: sendMedia falhou', { status: r.status, body: corpo, numero, mediatype: midia.mediatype });
+      throw new Error(`sendMedia falhou (${r.status})`);
+    }
   } catch (e) {
     logger.error('whatsapp: erro de rede no sendMedia', e);
+    throw e;
   }
 }
 

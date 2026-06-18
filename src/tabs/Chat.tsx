@@ -27,6 +27,7 @@ export function Chat() {
   const [mensagens, setMensagens] = useState<Mensagem[]>([]);
   const [texto, setTexto] = useState('');
   const [enviandoExtra, setEnviandoExtra] = useState(false);
+  const [erroEnvio, setErroEnvio] = useState('');
 
   useEffect(() => {
     api.get<{ clientes: Cliente[] }>('/clientes').then((r) => setClientes(r.clientes)).catch(() => {});
@@ -41,8 +42,9 @@ export function Chat() {
     if (!texto.trim() || !selecionado) return;
     const t = texto;
     setTexto('');
+    setErroEnvio('');
     setMensagens((m) => [...m, { direcao: 'out', conteudo: t }]);
-    await api.post(`/clientes/${selecionado}/mensagem`, { texto: t }).catch(() => {});
+    await api.post(`/clientes/${selecionado}/mensagem`, { texto: t }).catch((e) => setErroEnvio(e instanceof Error ? e.message : 'Falha ao enviar mensagem.'));
   }
 
   async function enviarTextoRapido(t: string) {
@@ -54,16 +56,20 @@ export function Chat() {
   async function enviarArquivo(file: File, tipo: string, caption = '') {
     if (!selecionado) return;
     setEnviandoExtra(true);
+    setErroEnvio('');
     try {
-      const mediaBase64 = await arquivoParaBase64(file);
+      const arquivo = await prepararArquivoParaEnvio(file, tipo);
+      const mediaBase64 = await arquivoParaBase64(arquivo);
       await api.post(`/clientes/${selecionado}/midia`, {
         mediaBase64,
-        mimetype: file.type || 'application/octet-stream',
-        fileName: file.name || `arquivo-${Date.now()}`,
+        mimetype: arquivo.type || 'application/octet-stream',
+        fileName: arquivo.name || `arquivo-${Date.now()}`,
         caption,
         tipo,
       });
-      setMensagens((m) => [...m, { direcao: 'out', conteudo: caption || file.name || 'Arquivo enviado' }]);
+      setMensagens((m) => [...m, { direcao: 'out', conteudo: caption || arquivo.name || 'Arquivo enviado' }]);
+    } catch (e) {
+      setErroEnvio(e instanceof Error ? e.message : 'Falha ao enviar arquivo.');
     } finally {
       setEnviandoExtra(false);
     }
@@ -155,8 +161,12 @@ export function Chat() {
                   value={texto} onChange={(e) => setTexto(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && enviar()}
                   placeholder="Assumir o atendimento e responder..."
                 />
+                <AudioRecorderButton disabled={enviandoExtra} onAudio={(file) => enviarArquivo(file, 'audio')} />
                 <Button size="icon" onClick={enviar} aria-label="Enviar"><Send className="h-4 w-4" /></Button>
               </div>
+            )}
+            {podeEnviar && erroEnvio && (
+              <div className="border-t border-border px-3 pb-3 text-xs text-destructive">{erroEnvio}</div>
             )}
           </>
         )}
@@ -174,6 +184,36 @@ function arquivoParaBase64(file: File): Promise<string> {
   });
 }
 
+async function prepararArquivoParaEnvio(file: File, tipo: string): Promise<File> {
+  if ((tipo === 'camera' || tipo === 'midia') && file.type.startsWith('image/')) {
+    try {
+      return await comprimirImagem(file);
+    } catch {
+      return file;
+    }
+  }
+  return file;
+}
+
+async function comprimirImagem(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const maxLado = 1600;
+  const escala = Math.min(1, maxLado / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * escala));
+  const height = Math.max(1, Math.round(bitmap.height * escala));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return file;
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+  bitmap.close?.();
+  if (!blob) return file;
+  const nome = file.name ? file.name.replace(/\.[^.]+$/, '.jpg') : `foto-${Date.now()}.jpg`;
+  return new File([blob], nome, { type: 'image/jpeg' });
+}
+
 function MenuAnexos({
   disabled, onArquivo, onPix, onResposta,
 }: {
@@ -183,7 +223,7 @@ function MenuAnexos({
   onResposta: (texto: string) => void;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [modal, setModal] = useState<null | 'pix' | 'audio' | 'respostas'>(null);
+  const [modal, setModal] = useState<null | 'pix' | 'respostas'>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -199,7 +239,6 @@ function MenuAnexos({
     { label: 'Documento', Icon: FileText, cor: 'text-violet-500', onClick: () => docRef.current?.click() },
     { label: 'Fotos e videos', Icon: Image, cor: 'text-blue-500', onClick: () => mediaRef.current?.click() },
     { label: 'Camera', Icon: Camera, cor: 'text-pink-500', onClick: () => cameraRef.current?.click() },
-    { label: 'Audio', Icon: Mic, cor: 'text-orange-500', onClick: () => setModal('audio') },
     { label: 'Pix', Icon: QrCode, cor: 'text-emerald-500', onClick: () => setModal('pix') },
     { label: 'Resposta rapida', Icon: Zap, cor: 'text-amber-500', onClick: () => setModal('respostas') },
   ];
@@ -234,7 +273,6 @@ function MenuAnexos({
         </>
       )}
       {modal === 'pix' && <ModalPix onFechar={() => setModal(null)} onEnviar={onPix} />}
-      {modal === 'audio' && <ModalAudio onFechar={() => setModal(null)} onEnviar={(f) => onArquivo(f, 'audio')} />}
       {modal === 'respostas' && <ModalRespostas onFechar={() => setModal(null)} onUsar={onResposta} />}
     </div>
   );
@@ -295,76 +333,113 @@ function ModalPix({ onFechar, onEnviar }: { onFechar: () => void; onEnviar: (tex
   );
 }
 
-function ModalAudio({ onFechar, onEnviar }: { onFechar: () => void; onEnviar: (file: File) => Promise<void> }) {
+function AudioRecorderButton({ disabled, onAudio }: { disabled: boolean; onAudio: (file: File) => Promise<void> }) {
   const [gravando, setGravando] = useState(false);
-  const [audio, setAudio] = useState<Blob | null>(null);
+  const [segundos, setSegundos] = useState(0);
   const [erro, setErro] = useState('');
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const enviarAoPararRef = useRef(false);
 
   async function iniciar() {
+    if (disabled || gravando) return;
     setErro('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+      const mimeType = melhorMimeAudio();
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorder.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
-      recorder.onstop = () => {
-        setAudio(new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' }));
+      recorder.onstop = async () => {
+        pararTimer();
+        setGravando(false);
+        const type = recorder.mimeType || mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type });
         stream.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+        if (!enviarAoPararRef.current || blob.size === 0) return;
+        const ext = type.includes('ogg') ? 'ogg' : 'webm';
+        const file = new File([blob], `audio-${Date.now()}.${ext}`, { type });
+        try {
+          await onAudio(file);
+        } catch (e) {
+          setErro(e instanceof Error ? e.message : 'Falha ao enviar audio.');
+        }
       };
       recorderRef.current = recorder;
-      recorder.start();
+      streamRef.current = stream;
+      enviarAoPararRef.current = false;
+      setSegundos(0);
+      iniciarTimer();
+      recorder.start(250);
       setGravando(true);
     } catch {
-      setErro('Nao foi possivel acessar o microfone. Voce tambem pode anexar um audio pronto.');
+      setErro('Microfone indisponivel.');
     }
   }
 
-  function parar() {
+  function finalizar(enviar: boolean) {
+    enviarAoPararRef.current = enviar;
     recorderRef.current?.stop();
-    setGravando(false);
-  }
-
-  async function enviarGravacao() {
-    if (!audio) return;
-    const file = new File([audio], `audio-${Date.now()}.webm`, { type: audio.type || 'audio/webm' });
-    await onEnviar(file);
-    onFechar();
-  }
-
-  async function escolher(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (file) {
-      await onEnviar(file);
-      onFechar();
+    if (!recorderRef.current) {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setGravando(false);
+      pararTimer();
     }
+  }
+
+  function iniciarTimer() {
+    pararTimer();
+    timerRef.current = setInterval(() => setSegundos((s) => s + 1), 1000);
+  }
+
+  function pararTimer() {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+  }
+
+  useEffect(() => () => {
+    pararTimer();
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+  }, []);
+
+  if (gravando) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-2">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+        <span className="min-w-10 text-xs tabular-nums text-destructive">{formatarTempo(segundos)}</span>
+        <button type="button" onClick={() => finalizar(false)} className="rounded p-1 text-muted-foreground hover:text-foreground" aria-label="Cancelar audio">
+          <X className="h-4 w-4" />
+        </button>
+        <button type="button" onClick={() => finalizar(true)} className="rounded bg-primary p-1 text-primary-foreground" aria-label="Enviar audio">
+          <Send className="h-4 w-4" />
+        </button>
+      </div>
+    );
   }
 
   return (
-    <Overlay onFechar={onFechar}>
-      <CabecalhoModal titulo="Audio" onFechar={onFechar} />
-      <input ref={inputRef} type="file" accept="audio/*" className="hidden" onChange={escolher} />
-      <div className="mt-3 space-y-3">
-        <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-          Grave um audio pelo navegador ou envie um arquivo de audio salvo no aparelho.
-        </div>
-        {audio && <audio controls src={URL.createObjectURL(audio)} className="w-full" />}
-        {erro && <p className="text-sm text-destructive">{erro}</p>}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="outline" onClick={() => inputRef.current?.click()}>Anexar audio</Button>
-          {!gravando ? (
-            <Button onClick={iniciar}>Gravar</Button>
-          ) : (
-            <Button variant="outline" onClick={parar}>Parar</Button>
-          )}
-          <Button onClick={enviarGravacao} disabled={!audio || gravando}>Enviar</Button>
-        </div>
-      </div>
-    </Overlay>
+    <div className="relative">
+      <Button type="button" variant="outline" size="icon" disabled={disabled} onClick={iniciar} aria-label="Gravar audio" title="Gravar audio">
+        <Mic className="h-4 w-4" />
+      </Button>
+      {erro && <div className="absolute bottom-12 right-0 z-20 w-48 rounded-md border border-border bg-card p-2 text-xs text-destructive shadow-lg">{erro}</div>}
+    </div>
   );
+}
+
+function melhorMimeAudio(): string {
+  const opcoes = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm'];
+  return opcoes.find((tipo) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(tipo)) || '';
+}
+
+function formatarTempo(segundos: number): string {
+  const min = Math.floor(segundos / 60).toString().padStart(2, '0');
+  const sec = (segundos % 60).toString().padStart(2, '0');
+  return `${min}:${sec}`;
 }
 
 function ModalRespostas({ onFechar, onUsar }: { onFechar: () => void; onUsar: (texto: string) => void }) {
