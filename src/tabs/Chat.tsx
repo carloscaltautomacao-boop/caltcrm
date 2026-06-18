@@ -70,6 +70,7 @@ export function Chat() {
       setMensagens((m) => [...m, { direcao: 'out', conteudo: caption || arquivo.name || 'Arquivo enviado' }]);
     } catch (e) {
       setErroEnvio(e instanceof Error ? e.message : 'Falha ao enviar arquivo.');
+      throw e;
     } finally {
       setEnviandoExtra(false);
     }

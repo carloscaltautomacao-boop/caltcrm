@@ -176,6 +176,13 @@ export async function sendWhatsAppAudio(numero: string, audio: string, delayMs =
       logger.error('whatsapp: sendAudio falhou', { status: r.status, body: corpo, numero });
       throw new Error(`sendAudio falhou (${r.status})`);
     }
+    try {
+      const j = JSON.parse(corpo) as { status?: string };
+      if (j?.status === 'ERROR') throw new Error('Evolution retornou status ERROR no audio');
+      if (j?.status) logger.info('whatsapp: sendAudio enfileirado', { numero, status: j.status });
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('Evolution retornou')) throw e;
+    }
   } catch (e) {
     logger.error('whatsapp: erro de rede no sendAudio', e);
     throw e;

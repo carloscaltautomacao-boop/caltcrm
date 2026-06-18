@@ -22,6 +22,11 @@ function limparBase64(valor: string): string {
   return valor.replace(/^data:[^;]+;base64,/, '');
 }
 
+function normalizarDataUriAudio(valor: string, mimetype: string): string {
+  if (valor.startsWith('data:')) return valor;
+  return `data:${mimetype};base64,${valor}`;
+}
+
 // Lista com filtros simples (etapa, busca por nome/telefone) — alimenta Clientes e Kanban.
 clientesRouter.get('/', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req, res) => {
   const { etapa, q } = req.query;
@@ -141,7 +146,7 @@ clientesRouter.post('/:id/midia', requirePermission(PERMISSIONS.CHAT_SEND), asyn
   const media = limparBase64(String(mediaBase64));
 
   if (String(tipo) === 'audio' || String(mimetype).startsWith('audio/')) {
-    await sendWhatsAppAudio(destino, media);
+    await sendWhatsAppAudio(destino, normalizarDataUriAudio(String(mediaBase64), String(mimetype)));
     await salvarMensagem(req.params.id, 'out', 'audio', nomeArquivo, 'humano');
     res.json({ ok: true });
     return;
