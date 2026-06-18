@@ -177,6 +177,36 @@ export async function sendWhatsAppAudio(numero: string, audioUrl: string): Promi
   }
 }
 
+export interface WhatsAppMedia {
+  mediatype: 'image' | 'video' | 'audio' | 'document';
+  mimetype: string;
+  media: string;
+  fileName?: string;
+  caption?: string;
+}
+
+export async function sendWhatsAppMedia(numero: string, midia: WhatsAppMedia): Promise<void> {
+  if (!EVO_URL || !midia.media) return;
+  try {
+    const r = await fetch(`${EVO_URL}/message/sendMedia/${EVO_INSTANCE}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({
+        number: numero,
+        mediatype: midia.mediatype,
+        mimetype: midia.mimetype,
+        media: midia.media,
+        fileName: midia.fileName,
+        caption: midia.caption || undefined,
+      }),
+    });
+    const corpo = await r.text();
+    if (!r.ok) logger.error('whatsapp: sendMedia falhou', { status: r.status, body: corpo, numero, mediatype: midia.mediatype });
+  } catch (e) {
+    logger.error('whatsapp: erro de rede no sendMedia', e);
+  }
+}
+
 // Estado da conexao da instancia no Evolution (open | connecting | close).
 export interface ConexaoStatus {
   estado: 'open' | 'connecting' | 'close' | 'desconhecido';

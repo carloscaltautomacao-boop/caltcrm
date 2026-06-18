@@ -26,6 +26,7 @@ export interface ConfigAgente {
   nao_se_despedir: boolean;
   custo_ia_teto_usd_mes: number; // 0 = sem teto (alerta de custo desligado)
   handoff: { carlos: string; rayane: string };
+  pix_texto: string;
 }
 
 // Valores padrão. getConfig faz merge sobre eles, então uma config antiga em produção (sem os campos
@@ -47,6 +48,7 @@ const DEFAULTS: ConfigAgente = {
   nao_se_despedir: true,
   custo_ia_teto_usd_mes: 0,
   handoff: { carlos: '', rayane: '' },
+  pix_texto: '',
 };
 
 export async function getConfig(): Promise<ConfigAgente> {

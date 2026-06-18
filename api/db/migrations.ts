@@ -168,6 +168,16 @@ const DDL: string[] = [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_anotacoes_cliente ON anotacoes (cliente_id, criado_em DESC)`,
 
+  // ----- Respostas rapidas do chat -----
+  `CREATE TABLE IF NOT EXISTS respostas_rapidas (
+     id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+     titulo text NOT NULL,
+     texto text NOT NULL,
+     criado_por uuid REFERENCES users(id) ON DELETE SET NULL,
+     criado_em timestamptz NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_respostas_rapidas_criado ON respostas_rapidas (criado_em DESC)`,
+
   // ----- Tracking de custo de IA -----
   `CREATE TABLE IF NOT EXISTS ai_usage (
      id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
