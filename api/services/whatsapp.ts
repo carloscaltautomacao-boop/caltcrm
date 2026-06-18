@@ -8,6 +8,10 @@ function headers(): Record<string, string> {
   return { 'Content-Type': 'application/json', apikey: EVO_APIKEY };
 }
 
+function authHeaders(): Record<string, string> {
+  return { apikey: EVO_APIKEY };
+}
+
 // Normaliza o numero para o formato que o Evolution espera (so digitos) e canonicaliza
 // celulares BR para SEMPRE incluir o nono digito. O WhatsApp ora manda o numero com o 9
 // (via senderPn), ora sem o 9 (via remoteJid @lid em contas Business); sem isso o mesmo
@@ -163,59 +167,46 @@ export async function sendWhatsAppText(numero: string, texto: string, delayMs = 
   }
 }
 
-export async function sendWhatsAppAudio(numero: string, audio: string, delayMs = 0): Promise<void> {
-  if (!EVO_URL || !audio) return;
-  try {
-    const r = await fetch(`${EVO_URL}/message/sendWhatsAppAudio/${EVO_INSTANCE}`, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({ number: numero, audio, ...(delayMs > 0 ? { delay: delayMs } : {}) }),
-    });
-    const corpo = await r.text();
-    if (!r.ok) {
-      logger.error('whatsapp: sendAudio falhou', { status: r.status, body: corpo, numero });
-      throw new Error(`sendAudio falhou (${r.status})`);
-    }
-    try {
-      const j = JSON.parse(corpo) as { status?: string };
-      if (j?.status === 'ERROR') throw new Error('Evolution retornou status ERROR no audio');
-      if (j?.status) logger.info('whatsapp: sendAudio enfileirado', { numero, status: j.status });
-    } catch (e) {
-      if (e instanceof Error && e.message.includes('Evolution retornou')) throw e;
-    }
-  } catch (e) {
-    logger.error('whatsapp: erro de rede no sendAudio', e);
-    throw e;
-  }
-}
-
 export interface WhatsAppMedia {
-  mediatype: 'image' | 'video' | 'document';
+  mediatype: 'image' | 'video' | 'audio' | 'document';
   mimetype: string;
   media: string;
   fileName?: string;
   caption?: string;
 }
 
+function mediaParaBlob(media: string, mimetype: string): Blob {
+  const base64 = media.replace(/^data:[^;]+;base64,/, '');
+  const bytes = Buffer.from(base64, 'base64');
+  return new Blob([new Uint8Array(bytes)], { type: mimetype });
+}
+
 export async function sendWhatsAppMedia(numero: string, midia: WhatsAppMedia): Promise<void> {
   if (!EVO_URL || !midia.media) return;
   try {
+    const form = new FormData();
+    form.append('number', numero);
+    form.append('mediatype', midia.mediatype);
+    form.append('media', mediaParaBlob(midia.media, midia.mimetype), midia.fileName || `arquivo-${Date.now()}`);
+    form.append('caption', midia.caption || '');
+    form.append('fileName', midia.fileName || `arquivo-${Date.now()}`);
+
     const r = await fetch(`${EVO_URL}/message/sendMedia/${EVO_INSTANCE}`, {
       method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({
-        number: numero,
-        mediatype: midia.mediatype,
-        mimetype: midia.mimetype,
-        media: midia.media,
-        fileName: midia.fileName,
-        caption: midia.caption || undefined,
-      }),
+      headers: authHeaders(),
+      body: form,
     });
     const corpo = await r.text();
     if (!r.ok) {
       logger.error('whatsapp: sendMedia falhou', { status: r.status, body: corpo, numero, mediatype: midia.mediatype });
       throw new Error(`sendMedia falhou (${r.status})`);
+    }
+    try {
+      const j = JSON.parse(corpo) as { status?: string };
+      if (j?.status === 'ERROR') throw new Error('Evolution retornou status ERROR na midia');
+      if (j?.status) logger.info('whatsapp: sendMedia enfileirado', { numero, status: j.status, mediatype: midia.mediatype });
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('Evolution retornou')) throw e;
     }
   } catch (e) {
     logger.error('whatsapp: erro de rede no sendMedia', e);

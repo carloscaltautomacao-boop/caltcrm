@@ -6,13 +6,14 @@ import { atualizarCliente, historicoMensagens, salvarMensagem } from '../service
 import { eventosDoCliente } from '../services/agenda.ts';
 import { listarAnotacoes, criarAnotacao, excluirAnotacao } from '../services/anotacoes.ts';
 import { getConfig, updateConfig } from '../services/config.ts';
-import { sendWhatsAppAudio, sendWhatsAppMedia, sendWhatsAppText, type WhatsAppMedia } from '../services/whatsapp.ts';
+import { sendWhatsAppMedia, sendWhatsAppText, type WhatsAppMedia } from '../services/whatsapp.ts';
 
 export const clientesRouter = Router();
 clientesRouter.use(requireAuth);
 
 function mediatypeDe(mimetype: string, tipo?: string): WhatsAppMedia['mediatype'] {
   if (tipo === 'documento') return 'document';
+  if (tipo === 'audio' || mimetype.startsWith('audio/')) return 'audio';
   if (mimetype.startsWith('image/')) return 'image';
   if (mimetype.startsWith('video/')) return 'video';
   return 'document';
@@ -22,10 +23,6 @@ function limparBase64(valor: string): string {
   return valor.replace(/^data:[^;]+;base64,/, '');
 }
 
-function normalizarDataUriAudio(valor: string, mimetype: string): string {
-  if (valor.startsWith('data:')) return valor;
-  return `data:${mimetype};base64,${valor}`;
-}
 
 // Lista com filtros simples (etapa, busca por nome/telefone) — alimenta Clientes e Kanban.
 clientesRouter.get('/', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req, res) => {
@@ -144,13 +141,6 @@ clientesRouter.post('/:id/midia', requirePermission(PERMISSIONS.CHAT_SEND), asyn
   const legenda = String(caption || '').trim();
   const destino = rows[0].whatsapp_jid || rows[0].telefone;
   const media = limparBase64(String(mediaBase64));
-
-  if (String(tipo) === 'audio' || String(mimetype).startsWith('audio/')) {
-    await sendWhatsAppAudio(destino, normalizarDataUriAudio(String(mediaBase64), String(mimetype)));
-    await salvarMensagem(req.params.id, 'out', 'audio', nomeArquivo, 'humano');
-    res.json({ ok: true });
-    return;
-  }
 
   await sendWhatsAppMedia(destino, {
     mediatype,
