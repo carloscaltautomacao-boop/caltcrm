@@ -142,6 +142,7 @@ clientesRouter.post('/:id/midia', requirePermission(PERMISSIONS.CHAT_SEND), asyn
   const destino = rows[0].whatsapp_jid || rows[0].telefone;
   const media = limparBase64(String(mediaBase64));
 
+
   await sendWhatsAppMedia(destino, {
     mediatype,
     mimetype: String(mimetype),
