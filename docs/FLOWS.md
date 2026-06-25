@@ -7,6 +7,8 @@
    - **Não entende** → explicação curta OU `enviar_audio_explicativo` (consórcio vs financiamento).
    - **Já entende** → pergunta como foi a experiência anterior.
 3. A IA coleta a **qualificação**: pretensão e tipo de bem, crédito pretendido, urgência, profissão, renda, Bolsa Família.
+   Dados complementares informados espontaneamente (e-mail, parcela ideal, forma de contemplação, interesse/valor
+   de lance e prazo) também são persistidos. Informação relevante sem campo próprio vai para `observacoes`.
 4. Com crédito + segmento → `buscar_planos` → `enviar_simulacao` (faixas de parcela; move etapa para "Simulação Enviada").
 5. Qualificação completa → `acionar_humano` (notifica o Carlos no WhatsApp). A IA **não se despede**.
 

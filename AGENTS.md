@@ -55,6 +55,7 @@ Variáveis em `.env` (modelo em `.env.example`): `OPENAI_API_KEY`, `DATABASE_URL
 | Enviar WhatsApp / configurar webhook   | `api/services/whatsapp.ts`                             |
 | Catálogo de planos / busca / simulação | `api/services/planos.ts` + `api/routes/planos.ts`      |
 | Clientes/qualificação                  | `api/services/clientes.ts` + `api/routes/clientes.ts`  |
+| Ficha completa/editável do cliente     | `src/components/clientes/FichaCliente.tsx` + `src/tabs/Clientes.tsx` |
 | Dashboard (BI)                         | `api/services/dashboard.ts` + `api/routes/dashboard.ts`|
 | Google Calendar / agenda (OAuth + sync)| `api/services/google-calendar.ts` + `api/services/agenda.ts` + `api/routes/agenda.ts` + `src/tabs/Calendario.tsx` |
 | Anotações do lead                       | `api/services/anotacoes.ts` + rotas `/clientes/:id/anotacoes` em `api/routes/clientes.ts` |
@@ -146,6 +147,8 @@ responder; `config.buffer_segundos`, padrão 8s; `processarComBuffer` em `agente
 ligados ao lead; handoff vira tarefa automaticamente; `services/agenda.ts` + `tabs/Calendario.tsx`) ·
 **ações no chat** (`AcoesLead`: anotações no lead, criar lembrete/evento e agendar mensagem de WhatsApp —
 tudo vinculado ao lead e visível na Agenda; a mensagem agendada é enviada por fora via n8n).
+**Ficha completa do cliente** (aberta pelos cards de Clientes e Funil): dados pessoais, contato, perfil
+financeiro, bem/crédito/parcela, urgência, sorteio/lance, gestão comercial, etiquetas e observações livres.
 **Desligados:** PDF, geração de imagem, **áudio explicativo pré-gravado** (removido), **follow-up automático**
 (será feito por fora via **n8n** — sem cron/motor no app). Agendamento foi re-habilitado como a aba Agenda.
 

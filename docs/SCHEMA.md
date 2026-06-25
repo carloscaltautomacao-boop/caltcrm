@@ -18,11 +18,13 @@ Fonte da verdade: `api/db/migrations.ts` (DDL idempotente). Extensões: `uuid-os
 ### `clientes` — leads
 nome, **telefone (unique, whatsapp normalizado)**, cidade, estado, profissao, renda_aproximada,
 recebe_bolsa_familia, entende_consorcio, origem, **etapa** (funil), tags[], vip,
+email, cpf_cnpj, data_nascimento, estado_civil, melhor_horario_contato, observacoes,
 **primeira_resposta_em** (KPI), criado_em, atualizado_em.
 
 ### `qualificacoes` — 1:1 com cliente
 cliente_id PK, pretensao_bem (`carro`/`imovel`/`solar`), tipo_bem, credito_pretendido, urgencia
-(`imediato`/`programado`), **completa** (todos os obrigatórios preenchidos).
+(`imediato`/`programado`), valor_parcela_ideal, forma_contemplacao (`sorteio`/`lance`/`indefinido`),
+interesse_lance, valor_lance, prazo_desejado, **completa** (todos os obrigatórios preenchidos).
 
 ### `planos` — catálogo (tabela pronta)
 id serial, segmento (`auto`/`imovel`/`solar`), bem (índice trigram), grupo, credito, prazo_meses,

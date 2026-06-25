@@ -31,12 +31,27 @@ export interface Cliente {
   estado: string | null;
   profissao: string | null;
   renda_aproximada: number | null;
+  email: string | null;
+  cpf_cnpj: string | null;
+  data_nascimento: string | null;
+  estado_civil: string | null;
+  melhor_horario_contato: string | null;
+  observacoes: string | null;
+  recebe_bolsa_familia: boolean | null;
+  entende_consorcio: boolean | null;
   etapa: string;
   origem: string | null;
+  tags: string[];
   vip: boolean;
   pretensao_bem?: string | null;
+  tipo_bem?: string | null;
   credito_pretendido?: number | null;
   urgencia?: string | null;
+  valor_parcela_ideal?: number | null;
+  forma_contemplacao?: string | null;
+  interesse_lance?: boolean | null;
+  valor_lance?: number | null;
+  prazo_desejado?: number | null;
   qualificacao_completa?: boolean;
   criado_em: string;
 }

@@ -12,6 +12,12 @@ export interface Cliente {
   estado: string | null;
   profissao: string | null;
   renda_aproximada: number | null;
+  email: string | null;
+  cpf_cnpj: string | null;
+  data_nascimento: string | null;
+  estado_civil: string | null;
+  melhor_horario_contato: string | null;
+  observacoes: string | null;
   recebe_bolsa_familia: boolean | null;
   entende_consorcio: boolean | null;
   origem: string | null;
@@ -55,8 +61,9 @@ export async function zerarCliente(clienteId: string): Promise<void> {
 // Atualiza apenas os campos informados (patch parcial), sempre tocando atualizado_em.
 export async function atualizarCliente(id: string, campos: Partial<Cliente>): Promise<void> {
   const permitidos: (keyof Cliente)[] = [
-    'nome', 'cidade', 'estado', 'profissao', 'renda_aproximada',
-    'recebe_bolsa_familia', 'entende_consorcio', 'origem', 'etapa', 'vip',
+    'nome', 'cidade', 'estado', 'profissao', 'renda_aproximada', 'email', 'cpf_cnpj',
+    'data_nascimento', 'estado_civil', 'melhor_horario_contato', 'observacoes',
+    'recebe_bolsa_familia', 'entende_consorcio', 'origem', 'etapa', 'tags', 'vip',
   ];
   const sets: string[] = [];
   const vals: unknown[] = [];
@@ -71,6 +78,22 @@ export async function atualizarCliente(id: string, campos: Partial<Cliente>): Pr
   sets.push(`atualizado_em = now()`);
   vals.push(id);
   await query(`UPDATE clientes SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+}
+
+export async function acrescentarObservacao(id: string, observacao: string): Promise<void> {
+  const texto = observacao.trim();
+  if (!texto) return;
+  await query(
+    `UPDATE clientes
+        SET observacoes = CASE
+          WHEN nullif(trim(observacoes), '') IS NULL THEN $2
+          WHEN position(lower($2) in lower(observacoes)) > 0 THEN observacoes
+          ELSE observacoes || E'\n' || $2
+        END,
+        atualizado_em = now()
+      WHERE id = $1`,
+    [id, texto],
+  );
 }
 
 export async function registrarPrimeiraRespostaSeNecessario(id: string): Promise<void> {
@@ -135,16 +158,34 @@ export async function historicoMensagens(clienteId: string, limite = 20): Promis
 // Salva/atualiza a qualificacao (upsert 1:1) e recalcula se esta completa.
 export async function upsertQualificacao(
   clienteId: string,
-  campos: { pretensao_bem?: string; tipo_bem?: string; credito_pretendido?: number; urgencia?: string },
+  campos: {
+    pretensao_bem?: string | null;
+    tipo_bem?: string | null;
+    credito_pretendido?: number | null;
+    urgencia?: string | null;
+    valor_parcela_ideal?: number | null;
+    forma_contemplacao?: string | null;
+    interesse_lance?: boolean | null;
+    valor_lance?: number | null;
+    prazo_desejado?: number | null;
+  },
 ): Promise<{ completa: boolean; faltando: string[] }> {
   await query(
-    `INSERT INTO qualificacoes (cliente_id, pretensao_bem, tipo_bem, credito_pretendido, urgencia)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO qualificacoes (
+       cliente_id, pretensao_bem, tipo_bem, credito_pretendido, urgencia,
+       valor_parcela_ideal, forma_contemplacao, interesse_lance, valor_lance, prazo_desejado
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (cliente_id) DO UPDATE SET
        pretensao_bem = COALESCE(EXCLUDED.pretensao_bem, qualificacoes.pretensao_bem),
        tipo_bem = COALESCE(EXCLUDED.tipo_bem, qualificacoes.tipo_bem),
        credito_pretendido = COALESCE(EXCLUDED.credito_pretendido, qualificacoes.credito_pretendido),
        urgencia = COALESCE(EXCLUDED.urgencia, qualificacoes.urgencia),
+       valor_parcela_ideal = COALESCE(EXCLUDED.valor_parcela_ideal, qualificacoes.valor_parcela_ideal),
+       forma_contemplacao = COALESCE(EXCLUDED.forma_contemplacao, qualificacoes.forma_contemplacao),
+       interesse_lance = COALESCE(EXCLUDED.interesse_lance, qualificacoes.interesse_lance),
+       valor_lance = COALESCE(EXCLUDED.valor_lance, qualificacoes.valor_lance),
+       prazo_desejado = COALESCE(EXCLUDED.prazo_desejado, qualificacoes.prazo_desejado),
        atualizado_em = now()`,
     [
       clienteId,
@@ -152,7 +193,44 @@ export async function upsertQualificacao(
       campos.tipo_bem ?? null,
       campos.credito_pretendido ?? null,
       campos.urgencia ?? null,
+      campos.valor_parcela_ideal ?? null,
+      campos.forma_contemplacao ?? null,
+      campos.interesse_lance ?? null,
+      campos.valor_lance ?? null,
+      campos.prazo_desejado ?? null,
     ],
+  );
+  return recalcularQualificacao(clienteId);
+}
+
+// Edição manual da ficha: diferente do upsert da IA, aceita null para limpar campos.
+export async function atualizarQualificacao(
+  clienteId: string,
+  campos: Record<string, unknown>,
+): Promise<{ completa: boolean; faltando: string[] }> {
+  const permitidos = [
+    'pretensao_bem', 'tipo_bem', 'credito_pretendido', 'urgencia', 'valor_parcela_ideal',
+    'forma_contemplacao', 'interesse_lance', 'valor_lance', 'prazo_desejado',
+  ];
+  const sets: string[] = [];
+  const valores: unknown[] = [];
+  let i = 1;
+  for (const campo of permitidos) {
+    if (campos[campo] !== undefined) {
+      sets.push(`${campo} = $${i++}`);
+      valores.push(campos[campo]);
+    }
+  }
+  if (!sets.length) return recalcularQualificacao(clienteId);
+  await query(
+    `INSERT INTO qualificacoes (cliente_id) VALUES ($1)
+     ON CONFLICT (cliente_id) DO NOTHING`,
+    [clienteId],
+  );
+  valores.push(clienteId);
+  await query(
+    `UPDATE qualificacoes SET ${sets.join(', ')}, atualizado_em = now() WHERE cliente_id = $${i}`,
+    valores,
   );
   return recalcularQualificacao(clienteId);
 }

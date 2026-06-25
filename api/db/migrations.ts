@@ -46,6 +46,13 @@ const DDL: string[] = [
   // 178843210006771@lid). e PARA ONDE a resposta tem de ir. Contas LID-migradas so recebem no @lid; o
   // numero canonicalizado (telefone) serve so para identidade/dedup, NUNCA para entregar. Ver whatsapp.ts.
   `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_jid text`,
+  // Dados complementares da ficha comercial. Todos opcionais para preservar leads antigos.
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS email text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS cpf_cnpj text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS data_nascimento date`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado_civil text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS melhor_horario_contato text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS observacoes text`,
 
   // ----- Qualificacao (1:1 com cliente) -----
   `CREATE TABLE IF NOT EXISTS qualificacoes (
@@ -57,6 +64,11 @@ const DDL: string[] = [
      completa boolean NOT NULL DEFAULT false,
      atualizado_em timestamptz NOT NULL DEFAULT now()
    )`,
+  `ALTER TABLE qualificacoes ADD COLUMN IF NOT EXISTS valor_parcela_ideal numeric`,
+  `ALTER TABLE qualificacoes ADD COLUMN IF NOT EXISTS forma_contemplacao text`,
+  `ALTER TABLE qualificacoes ADD COLUMN IF NOT EXISTS interesse_lance boolean`,
+  `ALTER TABLE qualificacoes ADD COLUMN IF NOT EXISTS valor_lance numeric`,
+  `ALTER TABLE qualificacoes ADD COLUMN IF NOT EXISTS prazo_desejado int`,
 
   // ----- Catalogo de planos (tabela pronta) -----
   `CREATE TABLE IF NOT EXISTS planos (

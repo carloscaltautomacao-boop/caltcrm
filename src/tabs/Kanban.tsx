@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Star, Car, Home, Sun, Package, MapPin, type LucideIcon } from 'lucide-react';
+import { Star, Car, Home, Sun, Package, MapPin, WalletCards, type LucideIcon } from 'lucide-react';
 import { api } from '../lib/api.ts';
 import { FUNIL_ETAPAS, FUNIL_LABELS, type Cliente } from '../lib/funil.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
 import { pode, PERMISSIONS } from '../lib/permissions.ts';
 import { cn } from '../lib/cn.ts';
+import { FichaCliente } from '../components/clientes/FichaCliente.tsx';
 
 const brl = (n?: number | null) => (n == null ? null : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }));
 
@@ -13,6 +14,7 @@ export function Kanban() {
   const podeMover = pode(user, PERMISSIONS.KANBAN_EDIT);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [arrastando, setArrastando] = useState<string | null>(null);
+  const [selecionado, setSelecionado] = useState<Cliente | null>(null);
 
   function carregar() {
     api.get<{ clientes: Cliente[] }>('/clientes').then((r) => setClientes(r.clientes)).catch(() => {});
@@ -56,6 +58,9 @@ export function Kanban() {
                       key={c.id}
                       draggable={podeMover}
                       onDragStart={() => setArrastando(c.id)}
+                      onClick={() => {
+                        if (!arrastando) setSelecionado(c);
+                      }}
                       className={cn(
                         'group rounded-xl border border-border bg-card p-3 text-sm shadow-sm transition-all duration-200',
                         podeMover && 'cursor-grab hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md active:cursor-grabbing',
@@ -79,6 +84,12 @@ export function Kanban() {
                           {valor}
                         </div>
                       )}
+                      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">{c.tipo_bem || c.profissao || 'Dados em coleta'}</span>
+                        {c.valor_parcela_ideal != null && (
+                          <span className="inline-flex shrink-0 items-center gap-1"><WalletCards className="h-3 w-3" /> {brl(c.valor_parcela_ideal)}</span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -90,6 +101,16 @@ export function Kanban() {
           );
         })}
       </div>
+      {selecionado && (
+        <FichaCliente
+          cliente={selecionado}
+          onFechar={() => setSelecionado(null)}
+          onAtualizado={(atualizado) => {
+            setClientes((lista) => lista.map((c) => c.id === atualizado.id ? atualizado : c));
+            setSelecionado(atualizado);
+          }}
+        />
+      )}
     </div>
   );
 }

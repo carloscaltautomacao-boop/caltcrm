@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { query } from '../db/pool.ts';
 import { requireAuth, requirePermission } from '../middleware/auth.ts';
 import { PERMISSIONS } from '../lib/permissions-list.ts';
-import { atualizarCliente, historicoMensagens, salvarMensagem } from '../services/clientes.ts';
+import { atualizarCliente, atualizarQualificacao, historicoMensagens, salvarMensagem } from '../services/clientes.ts';
 import { eventosDoCliente } from '../services/agenda.ts';
 import { listarAnotacoes, criarAnotacao, excluirAnotacao } from '../services/anotacoes.ts';
 import { getConfig, updateConfig } from '../services/config.ts';
@@ -37,7 +37,11 @@ clientesRouter.get('/', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req
   }
   const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
   const { rows } = await query(
-    `SELECT c.*, q.pretensao_bem, q.credito_pretendido, q.urgencia, q.completa AS qualificacao_completa
+    `SELECT c.*, c.renda_aproximada::float8 AS renda_aproximada,
+            q.pretensao_bem, q.tipo_bem, q.credito_pretendido::float8 AS credito_pretendido, q.urgencia,
+            q.valor_parcela_ideal::float8 AS valor_parcela_ideal, q.forma_contemplacao,
+            q.interesse_lance, q.valor_lance::float8 AS valor_lance,
+            q.prazo_desejado, q.completa AS qualificacao_completa
        FROM clientes c LEFT JOIN qualificacoes q ON q.cliente_id = c.id
        ${where} ORDER BY c.atualizado_em DESC LIMIT 500`,
     params,
@@ -84,7 +88,11 @@ clientesRouter.put('/pix', requirePermission(PERMISSIONS.CHAT_SEND), async (req,
 
 clientesRouter.get('/:id', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req, res) => {
   const { rows } = await query(
-    `SELECT c.*, q.pretensao_bem, q.tipo_bem, q.credito_pretendido, q.urgencia, q.completa AS qualificacao_completa
+    `SELECT c.*, c.renda_aproximada::float8 AS renda_aproximada,
+            q.pretensao_bem, q.tipo_bem, q.credito_pretendido::float8 AS credito_pretendido, q.urgencia,
+            q.valor_parcela_ideal::float8 AS valor_parcela_ideal, q.forma_contemplacao,
+            q.interesse_lance, q.valor_lance::float8 AS valor_lance,
+            q.prazo_desejado, q.completa AS qualificacao_completa
        FROM clientes c LEFT JOIN qualificacoes q ON q.cliente_id = c.id WHERE c.id = $1`,
     [req.params.id],
   );
@@ -95,8 +103,10 @@ clientesRouter.get('/:id', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (
 });
 
 clientesRouter.patch('/:id', requirePermission(PERMISSIONS.CLIENTES_EDIT), async (req, res) => {
-  await atualizarCliente(req.params.id, req.body ?? {});
-  res.json({ ok: true });
+  const corpo = req.body ?? {};
+  await atualizarCliente(req.params.id, corpo);
+  const qualificacao = await atualizarQualificacao(req.params.id, corpo);
+  res.json({ ok: true, qualificacao });
 });
 
 // Mover card no Kanban (atualiza etapa).

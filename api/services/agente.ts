@@ -8,6 +8,7 @@ import { getConfig } from './config.ts';
 import { sendWhatsAppText, dividirEmBaloes, calcularDelayDigitacao } from './whatsapp.ts';
 import {
   type Cliente,
+  acrescentarObservacao,
   atualizarCliente,
   salvarMensagem,
   historicoMensagens,
@@ -156,16 +157,27 @@ async function aplicarDadosExtraidos(cliente: Cliente, ex: Extracao): Promise<vo
   if (d.estado) patch.estado = String(d.estado);
   if (d.profissao) patch.profissao = String(d.profissao);
   if (typeof d.renda_aproximada === 'number') patch.renda_aproximada = d.renda_aproximada;
+  if (d.email) patch.email = String(d.email);
   if (typeof d.recebe_bolsa_familia === 'boolean') patch.recebe_bolsa_familia = d.recebe_bolsa_familia;
   if (typeof d.entende_consorcio === 'boolean') patch.entende_consorcio = d.entende_consorcio;
   if (Object.keys(patch).length) await atualizarCliente(cliente.id, patch);
+  if (d.observacao) await acrescentarObservacao(cliente.id, String(d.observacao));
 
-  if (d.pretensao_bem || d.tipo_bem || d.credito_pretendido || d.urgencia) {
+  if (
+    d.pretensao_bem || d.tipo_bem || d.credito_pretendido || d.urgencia ||
+    d.valor_parcela_ideal || d.forma_contemplacao || typeof d.interesse_lance === 'boolean' ||
+    d.valor_lance || d.prazo_desejado
+  ) {
     await upsertQualificacao(cliente.id, {
       pretensao_bem: d.pretensao_bem ? String(d.pretensao_bem) : undefined,
       tipo_bem: d.tipo_bem ? String(d.tipo_bem) : undefined,
       credito_pretendido: typeof d.credito_pretendido === 'number' ? d.credito_pretendido : undefined,
       urgencia: d.urgencia ? String(d.urgencia) : undefined,
+      valor_parcela_ideal: typeof d.valor_parcela_ideal === 'number' ? d.valor_parcela_ideal : undefined,
+      forma_contemplacao: d.forma_contemplacao ? String(d.forma_contemplacao) : undefined,
+      interesse_lance: typeof d.interesse_lance === 'boolean' ? d.interesse_lance : undefined,
+      valor_lance: typeof d.valor_lance === 'number' ? d.valor_lance : undefined,
+      prazo_desejado: typeof d.prazo_desejado === 'number' ? d.prazo_desejado : undefined,
     });
   }
 }
@@ -184,7 +196,11 @@ async function executarTool(
 
   switch (nome) {
     case 'registrar_dados_cliente': {
-      await atualizarCliente(cliente.id, args as Partial<Cliente>);
+      const observacao = args.observacoes ? String(args.observacoes) : '';
+      const dados = { ...args };
+      delete dados.observacoes;
+      await atualizarCliente(cliente.id, dados as Partial<Cliente>);
+      if (observacao) await acrescentarObservacao(cliente.id, observacao);
       return { ok: true };
     }
     case 'registrar_qualificacao': {
