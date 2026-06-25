@@ -22,10 +22,12 @@ interface ConexaoRow {
 export interface GoogleCalendarStatus {
   configurado: boolean;
   conectado: boolean;
+  sincronizacao_ok: boolean | null;
   conta_email: string | null;
   calendar_id: string | null;
   calendar_nome: string | null;
   conectado_em: string | null;
+  erro_sincronizacao?: string;
   erro_configuracao?: string;
 }
 
@@ -71,13 +73,33 @@ async function conexao(): Promise<ConexaoRow | null> {
 
 export async function statusGoogleCalendar(): Promise<GoogleCalendarStatus> {
   const c = await conexao();
+  let sincronizacaoOk: boolean | null = null;
+  let erroSincronizacao: string | undefined;
+  if (c) {
+    try {
+      const client = oauthClient();
+      client.setCredentials({ refresh_token: decifrar(c.refresh_token_cifrado) });
+      await google.calendar({ version: 'v3', auth: client }).events.list({
+        calendarId: c.calendar_id,
+        maxResults: 1,
+        singleEvents: true,
+        timeMin: new Date().toISOString(),
+      });
+      sincronizacaoOk = true;
+    } catch (e) {
+      sincronizacaoOk = false;
+      erroSincronizacao = e instanceof Error ? e.message : 'Falha ao consultar o Google Calendar.';
+    }
+  }
   return {
     configurado: credenciaisConfiguradas(),
     conectado: Boolean(c),
+    sincronizacao_ok: sincronizacaoOk,
     conta_email: c?.conta_email ?? null,
     calendar_id: c?.calendar_id ?? null,
     calendar_nome: c?.calendar_nome ?? null,
     conectado_em: c?.conectado_em ?? null,
+    ...(erroSincronizacao ? { erro_sincronizacao: erroSincronizacao } : {}),
     ...(!credenciaisConfiguradas() ? { erro_configuracao: 'Defina GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e VITE_APP_URL.' } : {}),
   };
 }

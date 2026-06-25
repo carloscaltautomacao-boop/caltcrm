@@ -5,6 +5,7 @@ import {
   isoEventoGoogle,
 } from './google-calendar.ts';
 import type { calendar_v3 } from 'googleapis';
+import { logger } from '../lib/logger.ts';
 
 // Tipos de evento. tarefa/lembrete/compromisso sao manuais (humano); follow_up e gerado pelo motor.
 // 'mensagem' = WhatsApp agendado criado no chat: o app SO salva (status='pendente', canal='whatsapp',
@@ -68,7 +69,8 @@ export interface FiltroEventos {
 export async function listarEventos(f: FiltroEventos): Promise<EventoView[]> {
   try {
     await sincronizarAgendaGoogle(f.de, f.ate);
-  } catch {
+  } catch (e) {
+    logger.error('agenda: falha ao sincronizar Google Calendar', e);
     // O shadow local mantem a operacao e o n8n funcionando durante indisponibilidade/revogacao do Google.
   }
   const cond: string[] = [];

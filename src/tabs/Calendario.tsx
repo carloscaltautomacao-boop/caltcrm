@@ -37,10 +37,12 @@ type Vista = 'mes' | 'agenda';
 interface GoogleStatus {
   configurado: boolean;
   conectado: boolean;
+  sincronizacao_ok: boolean | null;
   conta_email: string | null;
   calendar_id: string | null;
   calendar_nome: string | null;
   conectado_em: string | null;
+  erro_sincronizacao?: string;
   erro_configuracao?: string;
 }
 
@@ -147,6 +149,11 @@ export function Calendario() {
               ? `${googleStatus.calendar_nome || 'Agenda principal'}${googleStatus.conta_email ? ` · ${googleStatus.conta_email}` : ''}. O Google e a fonte oficial dos eventos.`
               : googleStatus?.erro_configuracao || 'Conecte a conta Google da operacao para ativar a sincronizacao.'}
           </p>
+          {googleStatus?.erro_sincronizacao && (
+            <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-sm text-destructive">
+              Falha na sincronizacao: {googleStatus.erro_sincronizacao}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {googleStatus?.conectado && (
