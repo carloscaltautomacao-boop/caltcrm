@@ -290,12 +290,11 @@ function statusValido(valor: string | undefined, googleStatus: string | null | u
 
 async function importarEventoGoogle(g: calendar_v3.Schema$Event, calendarId: string): Promise<void> {
   if (!g.id) return;
-  if (g.status === 'cancelled' && !g.start) {
+  if (g.status === 'cancelled') {
     await query(
-      `UPDATE eventos SET status = 'cancelado', google_etag = $3, google_updated_at = $4,
-         sync_error = NULL, atualizado_em = now()
+      `DELETE FROM eventos
        WHERE google_calendar_id = $1 AND google_event_id = $2`,
-      [calendarId, g.id, g.etag ?? null, g.updated ?? null],
+      [calendarId, g.id],
     );
     return;
   }
