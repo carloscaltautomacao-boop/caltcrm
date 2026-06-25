@@ -156,6 +156,30 @@ const DDL: string[] = [
   // Garante NO MAXIMO 1 follow-up pendente por lead (idempotencia contra webhooks concorrentes).
   `CREATE UNIQUE INDEX IF NOT EXISTS uniq_followup_pendente
      ON eventos (cliente_id) WHERE tipo = 'follow_up' AND status = 'pendente'`,
+  // O Google Calendar e a fonte de verdade da agenda. `eventos` permanece como shadow/outbox para
+  // metadados do CRM (lead, status, handoff e fila de mensagens do n8n).
+  `ALTER TABLE eventos ADD COLUMN IF NOT EXISTS google_event_id text`,
+  `ALTER TABLE eventos ADD COLUMN IF NOT EXISTS google_calendar_id text`,
+  `ALTER TABLE eventos ADD COLUMN IF NOT EXISTS google_etag text`,
+  `ALTER TABLE eventos ADD COLUMN IF NOT EXISTS google_html_link text`,
+  `ALTER TABLE eventos ADD COLUMN IF NOT EXISTS google_updated_at timestamptz`,
+  `ALTER TABLE eventos ADD COLUMN IF NOT EXISTS sync_error text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS uniq_eventos_google
+     ON eventos (google_calendar_id, google_event_id) WHERE google_event_id IS NOT NULL`,
+
+  // Conexao organizacional unica com o Google Calendar. O refresh token e cifrado pela aplicacao.
+  `CREATE TABLE IF NOT EXISTS google_calendar_conexoes (
+     id int PRIMARY KEY DEFAULT 1,
+     refresh_token_cifrado text NOT NULL,
+     conta_email text,
+     calendar_id text NOT NULL DEFAULT 'primary',
+     calendar_nome text,
+     scopes text[] NOT NULL DEFAULT '{}',
+     conectado_por uuid REFERENCES users(id) ON DELETE SET NULL,
+     conectado_em timestamptz NOT NULL DEFAULT now(),
+     atualizado_em timestamptz NOT NULL DEFAULT now(),
+     CONSTRAINT google_calendar_singleton CHECK (id = 1)
+   )`,
 
   // ----- Anotacoes (notas livres sobre o lead, criadas no chat) -----
   // Texto curto sem "quando" (diferente de eventos). Aparece no painel de anotacoes do chat.

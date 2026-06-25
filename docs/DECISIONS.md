@@ -39,3 +39,11 @@ atrapalhou a promoção pra produção; (2) o Carlos já usa **n8n** e prefere o
 flexibilidade de gatilhos. Decisão: **remover cron + motor de reativação do código**; manter só a aba Agenda
 (gestão de tarefas) e a API `/api/agenda`, que o n8n pode usar para criar/ler eventos. O `eventos.tipo`
 `follow_up` e o índice parcial único ficam reservados caso o n8n queira gravar follow-ups na agenda.
+
+## D11 — Google Calendar como fonte de verdade; `eventos` como shadow/outbox
+
+O calendário oficial da operação é o Google Calendar conectado por OAuth 2.0. Mantemos `eventos` porque
+o Calendar não armazena todos os conceitos do CRM e porque o n8n precisa de uma fila consultável para
+mensagens agendadas. A sincronização é bidirecional: o CRUD do CRM escreve no Google e toda listagem
+importa mudanças feitas no Google. Tokens de longa duração ficam cifrados; falhas da API não apagam o
+trabalho e são reenviadas pelo outbox.

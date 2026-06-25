@@ -32,7 +32,9 @@ const ABAS: Aba[] = [
 export function App() {
   const { user, carregando, logout } = useAuth();
   const { tema, alternar } = useTheme();
-  const [ativa, setAtiva] = useState('dashboard');
+  const [ativa, setAtiva] = useState(() =>
+    new URLSearchParams(window.location.search).has('google_calendar') ? 'agenda' : 'dashboard',
+  );
 
   if (carregando) {
     return (

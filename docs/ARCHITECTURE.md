@@ -40,3 +40,10 @@ Todo request de IA passa por `api/lib/ai.ts`, que registra custo em `ai_usage`.
 - `api/index.ts` re-exporta o app Express; `vercel.json` roteia `/api/*` para a function e o resto para a SPA.
 - Migrations rodam uma vez por cold start (guard `garantirMigrations`), antes de qualquer rota.
 - O webhook responde `200` imediatamente e processa a IA em background para não estourar o timeout do Evolution.
+
+## Google Calendar
+
+- `api/services/google-calendar.ts`: OAuth 2.0, refresh token cifrado e cliente da Calendar API.
+- Google Calendar é a fonte de verdade dos eventos.
+- `eventos` funciona como shadow/outbox para metadados do CRM e para a fila operacional do n8n.
+- A leitura da agenda importa mudanças feitas diretamente no Google; escritas do CRM são enviadas ao Google.

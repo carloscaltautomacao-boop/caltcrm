@@ -10,6 +10,7 @@
 ## Fase 1 — Agenda e follow-up
 - [x] Aba **Agenda/Calendário** (tabela `eventos`): tarefas/lembretes/compromissos manuais + views mês/lista.
 - [x] Handoff vira **tarefa** na agenda (`criarTarefaHandoff`).
+- [x] Google Calendar como agenda oficial, com OAuth 2.0, sincronização bidirecional e outbox resiliente.
 - [~] **Follow-up automático**: será feito por fora, no **n8n** (cron/motor removidos do app; ver DECISIONS D10).
 - [ ] Estado de `acao_pendente` para confirmações em curso.
 - [ ] Onboarding estrito (parser de nome rejeitando números/frases longas).

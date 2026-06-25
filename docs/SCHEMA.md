@@ -54,6 +54,13 @@ payload (jsonb), concluido_em, criado_por (→users; null = sistema), criado_em,
 - Datas sempre UTC; renderização em `America/Sao_Paulo` no front (`src/lib/agenda.ts`).
 - Hoje o sistema só injeta evento via `criarTarefaHandoff` (handoff → tarefa). Demais eventos são manuais
   (CRUD em `/api/agenda`); follow-up automático seria criado por fora (n8n) via a mesma API.
+- O Google Calendar é a fonte de verdade. Colunas `google_event_id`, `google_calendar_id`, `google_etag`,
+  `google_html_link`, `google_updated_at` e `sync_error` transformam esta tabela em shadow/outbox.
+
+### `google_calendar_conexoes` — conexão OAuth organizacional
+
+Linha única (`id=1`) com conta/calendário conectado e refresh token cifrado em AES-256-GCM. A chave é
+derivada de `JWT_SECRET`; trocar esse segredo exige reconectar o Google Calendar.
 
 ### `config` — linha única (singleton id=1)
 `dados` jsonb: persona/regras/roteiro/faq/base_conhecimento, buffer_segundos, dividir_mensagens,

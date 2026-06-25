@@ -39,3 +39,14 @@ evento que o sistema injeta hoje é o do **handoff**: ao `acionar_humano`, `cria
 O follow-up/reativação automática **não está no app** (decisão do Carlos): será orquestrado por fora, no
 **n8n**. O n8n pode ler o estado pelo banco/API, criar eventos na agenda via `POST /api/agenda` e disparar
 mensagens no WhatsApp por conta própria. Não há cron nem motor de reativação no código.
+
+## Sincronização com Google Calendar
+
+O Google Calendar é a fonte oficial. A conta da operação é conectada por OAuth 2.0 na aba Agenda.
+O CRUD em `/api/agenda` grava um shadow/outbox em `eventos` e cria, atualiza ou exclui o item
+correspondente no Google. A listagem consulta o Google antes de responder, então alterações feitas
+diretamente no Google voltam ao CRM. O shadow local preserva vínculo com lead, status operacional,
+handoff e a fila de mensagens agendadas consumida pelo n8n.
+
+Se o Google estiver temporariamente indisponível, o evento permanece com `sync_error` e é reenviado na
+próxima sincronização.

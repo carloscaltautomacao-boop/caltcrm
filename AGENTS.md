@@ -56,7 +56,7 @@ Variáveis em `.env` (modelo em `.env.example`): `OPENAI_API_KEY`, `DATABASE_URL
 | Catálogo de planos / busca / simulação | `api/services/planos.ts` + `api/routes/planos.ts`      |
 | Clientes/qualificação                  | `api/services/clientes.ts` + `api/routes/clientes.ts`  |
 | Dashboard (BI)                         | `api/services/dashboard.ts` + `api/routes/dashboard.ts`|
-| Agenda/Calendário (eventos, CRUD)      | `api/services/agenda.ts` + `api/routes/agenda.ts` + `src/tabs/Calendario.tsx` |
+| Google Calendar / agenda (OAuth + sync)| `api/services/google-calendar.ts` + `api/services/agenda.ts` + `api/routes/agenda.ts` + `src/tabs/Calendario.tsx` |
 | Anotações do lead                       | `api/services/anotacoes.ts` + rotas `/clientes/:id/anotacoes` em `api/routes/clientes.ts` |
 | Ações no chat (anotação/lembrete/msg)   | `src/components/chat/AcoesLead.tsx` (no header de `src/tabs/Chat.tsx`)        |
 | Config do agente / handoff             | `api/services/config.ts` + `api/routes/config.ts`      |
@@ -103,8 +103,10 @@ Variáveis em `.env` (modelo em `.env.example`): `OPENAI_API_KEY`, `DATABASE_URL
 - **Serviços** foi descontinuado como produto — só Automóveis, Imóveis e Energia Solar.
 - `remoteJid` pode vir `@lid` em contas Business; o webhook prefere `senderPn` (número real) quando existe.
 - Falha no tracking de `ai_usage` **não derruba** o atendimento (best-effort).
-- **Agenda = uma tabela `eventos` polimórfica** (`tarefa`/`lembrete`/`compromisso` manuais + `follow_up`,
-  reservado + `mensagem`, ver abaixo). Handoff vira uma `tarefa` na agenda (`criarTarefaHandoff`). Índice
+- **Google Calendar é a agenda oficial**. A tabela `eventos` é um shadow/outbox polimórfico
+  (`tarefa`/`lembrete`/`compromisso` manuais + `follow_up`, reservado + `mensagem`, ver abaixo), preservando
+  metadados do CRM e a fila do n8n. Handoff vira uma `tarefa` no Google (`criarTarefaHandoff`). A listagem
+  sincroniza mudanças feitas diretamente no Google. Índice
   **parcial único** `uniq_followup_pendente` garante no máx. 1 follow-up pendente por lead (caso o follow-up
   venha a criar tais eventos via API). A aba é **gestão de tarefas manual** + os itens que o sistema injeta
   (handoff) + os criados pelo chat (lembrete/mensagem). `tipo` é `text` livre (sem CHECK), então novos tipos
@@ -167,7 +169,8 @@ tudo vinculado ao lead e visível na Agenda; a mensagem agendada é enviada por 
 
 ## Documentação complementar
 
-`docs/ARCHITECTURE.md` · `docs/SCHEMA.md` · `docs/FLOWS.md` · `docs/DECISIONS.md` · `docs/ROADMAP.md`
+`docs/ARCHITECTURE.md` · `docs/SCHEMA.md` · `docs/FLOWS.md` · `docs/DECISIONS.md` · `docs/ROADMAP.md` ·
+`docs/GOOGLE_CALENDAR_SETUP.md`
 
 ## Política de mudanças
 

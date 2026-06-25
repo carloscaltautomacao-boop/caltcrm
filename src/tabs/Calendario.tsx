@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Plus, ChevronLeft, ChevronRight, Check, X, Trash2, Clock, RotateCcw, CalendarDays, List, Bot,
+  ExternalLink, Unplug, RefreshCw,
 } from 'lucide-react';
 import { api } from '../lib/api.ts';
 import { useAuth } from '../auth/AuthContext.tsx';
@@ -33,14 +34,28 @@ const tituloMes = (d: Date) => new Intl.DateTimeFormat('pt-BR', { month: 'long',
 
 type Vista = 'mes' | 'agenda';
 
+interface GoogleStatus {
+  configurado: boolean;
+  conectado: boolean;
+  conta_email: string | null;
+  calendar_id: string | null;
+  calendar_nome: string | null;
+  conectado_em: string | null;
+  erro_configuracao?: string;
+}
+
 export function Calendario() {
   const { user } = useAuth();
   const podeEditar = pode(user, PERMISSIONS.AGENDA_EDIT);
+  const podeConfigurar = pode(user, PERMISSIONS.CONFIG_EDIT);
 
   const [vista, setVista] = useState<Vista>('agenda');
   const [refMes, setRefMes] = useState(() => inicioDoMes(new Date()));
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([]);
+  const [googleStatus, setGoogleStatus] = useState<GoogleStatus | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const podeEditarAgenda = podeEditar && Boolean(googleStatus?.conectado);
 
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
@@ -50,7 +65,8 @@ export function Calendario() {
   const [editando, setEditando] = useState<Evento | null>(null);
   const [criandoEm, setCriandoEm] = useState<string | null>(null); // ISO inicial ao criar, ou null
 
-  function carregar() {
+  async function carregar() {
+    setSincronizando(true);
     let de: Date, ate: Date;
     if (vista === 'mes') {
       const g = gridDias(refMes);
@@ -64,14 +80,33 @@ export function Calendario() {
     if (filtroTipo) qs.set('tipo', filtroTipo);
     if (filtroStatus) qs.set('status', filtroStatus);
     if (meus) qs.set('meus', '1');
-    api.get<{ eventos: Evento[] }>(`/agenda?${qs}`).then((r) => setEventos(r.eventos)).catch(() => {});
+    try {
+      const r = await api.get<{ eventos: Evento[] }>(`/agenda?${qs}`);
+      setEventos(r.eventos);
+    } catch {
+      // Mantem os eventos ja carregados se o Google estiver temporariamente indisponivel.
+    } finally {
+      setSincronizando(false);
+    }
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(carregar, [vista, refMes, filtroTipo, filtroStatus, meus]);
+  useEffect(() => { void carregar(); }, [vista, refMes, filtroTipo, filtroStatus, meus]);
   useEffect(() => {
     api.get<{ responsaveis: Responsavel[] }>('/agenda/responsaveis').then((r) => setResponsaveis(r.responsaveis)).catch(() => {});
+    api.get<GoogleStatus>('/agenda/google/status').then(setGoogleStatus).catch(() => {});
   }, []);
+
+  async function conectarGoogle() {
+    const r = await api.get<{ url: string }>('/agenda/google/connect');
+    window.location.href = r.url;
+  }
+
+  async function desconectarGoogle() {
+    if (!window.confirm('Desconectar o Google Calendar? Os eventos existentes nao serao apagados.')) return;
+    await api.del('/agenda/google/connection');
+    setGoogleStatus(await api.get<GoogleStatus>('/agenda/google/status'));
+  }
 
   const porDia = useMemo(() => {
     const map = new Map<string, Evento[]>();
@@ -98,6 +133,40 @@ export function Calendario() {
 
   return (
     <div className="space-y-4">
+      <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            <span className="font-semibold">Google Calendar</span>
+            {googleStatus?.conectado
+              ? <Badge variant="success">Conectado</Badge>
+              : <Badge variant="secondary">Nao conectado</Badge>}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {googleStatus?.conectado
+              ? `${googleStatus.calendar_nome || 'Agenda principal'}${googleStatus.conta_email ? ` · ${googleStatus.conta_email}` : ''}. O Google e a fonte oficial dos eventos.`
+              : googleStatus?.erro_configuracao || 'Conecte a conta Google da operacao para ativar a sincronizacao.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {googleStatus?.conectado && (
+            <>
+              <Button variant="outline" size="sm" onClick={carregar} disabled={sincronizando}>
+                <RefreshCw className={cn('h-4 w-4', sincronizando && 'animate-spin')} /> Sincronizar
+              </Button>
+              <a href="https://calendar.google.com/calendar/u/0/r" target="_blank" rel="noreferrer">
+                <Button variant="outline" size="sm"><ExternalLink className="h-4 w-4" /> Abrir Google Agenda</Button>
+              </a>
+            </>
+          )}
+          {podeConfigurar && googleStatus?.configurado && (
+            googleStatus.conectado
+              ? <Button variant="ghost" size="sm" onClick={desconectarGoogle}><Unplug className="h-4 w-4" /> Desconectar</Button>
+              : <Button size="sm" onClick={conectarGoogle}>Conectar Google Calendar</Button>
+          )}
+        </div>
+      </Card>
+
       {/* Barra de controles */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex overflow-hidden rounded-md border border-border">
@@ -135,7 +204,7 @@ export function Calendario() {
             <input type="checkbox" checked={meus} onChange={(e) => setMeus(e.target.checked)} className="h-4 w-4 rounded border-input accent-primary" />
             Só meus
           </label>
-          {podeEditar && (
+          {podeEditarAgenda && (
             <Button size="sm" onClick={() => { setEditando(null); setCriandoEm(new Date().toISOString()); }}>
               <Plus className="h-4 w-4" /> Novo
             </Button>
@@ -145,12 +214,12 @@ export function Calendario() {
 
       {vista === 'mes'
         ? <VistaMes refMes={refMes} porDia={porDia} onEvento={setSelecionado}
-            onDia={podeEditar ? (d) => { setEditando(null); setCriandoEm(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0).toISOString()); } : undefined} />
+            onDia={podeEditarAgenda ? (d) => { setEditando(null); setCriandoEm(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0).toISOString()); } : undefined} />
         : <VistaAgenda porDia={porDia} onEvento={setSelecionado} />}
 
       {selecionado && (
         <DrawerEvento
-          ev={selecionado} podeEditar={podeEditar}
+          ev={selecionado} podeEditar={podeEditarAgenda}
           onFechar={() => setSelecionado(null)}
           onConcluir={() => mudarStatus(selecionado, 'concluido')}
           onReabrir={() => mudarStatus(selecionado, 'pendente')}
@@ -160,7 +229,7 @@ export function Calendario() {
         />
       )}
 
-      {(criandoEm !== null || editando) && podeEditar && (
+      {(criandoEm !== null || editando) && podeEditarAgenda && (
         <FormEvento
           evento={editando} inicialIso={criandoEm} responsaveis={responsaveis}
           onFechar={() => { setEditando(null); setCriandoEm(null); }}
@@ -313,6 +382,7 @@ function DrawerEvento({ ev, podeEditar, onFechar, onConcluir, onReabrir, onCance
         {ev.responsavel_nome && <Linha rotulo="Responsável" valor={ev.responsavel_nome} />}
         {ev.canal && <Linha rotulo="Canal" valor={ev.canal} />}
         {ev.descricao && <div className="rounded-md border border-border bg-muted/40 p-2 text-muted-foreground whitespace-pre-wrap">{ev.descricao}</div>}
+        {ev.sync_error && <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-amber-700">Pendente de sincronizacao: {ev.sync_error}</div>}
       </div>
 
       {podeEditar && (
@@ -324,6 +394,11 @@ function DrawerEvento({ ev, podeEditar, onFechar, onConcluir, onReabrir, onCance
           {!ev.automatico && <Button size="sm" variant="outline" onClick={onEditar}>Editar</Button>}
           {ev.status === 'pendente' && <Button size="sm" variant="outline" onClick={onCancelar}>Cancelar</Button>}
           <Button size="sm" variant="destructive" onClick={onExcluir}><Trash2 className="h-4 w-4" /> Excluir</Button>
+          {ev.google_html_link && (
+            <a href={ev.google_html_link} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline"><ExternalLink className="h-4 w-4" /> Abrir no Google</Button>
+            </a>
+          )}
         </div>
       )}
     </Overlay>

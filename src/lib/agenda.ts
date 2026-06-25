@@ -24,6 +24,11 @@ export interface Evento {
   cliente_nome: string | null;
   cliente_telefone: string | null;
   responsavel_nome: string | null;
+  google_event_id: string | null;
+  google_calendar_id: string | null;
+  google_html_link: string | null;
+  google_updated_at: string | null;
+  sync_error: string | null;
 }
 
 export interface Responsavel {
