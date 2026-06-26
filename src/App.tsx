@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { LayoutDashboard, Columns3, Users, MessageSquare, CalendarDays, Settings } from 'lucide-react';
+import { LayoutDashboard, Columns3, Users, MessageSquare, CalendarDays, Settings, ClipboardList } from 'lucide-react';
 import { useAuth } from './auth/AuthContext.tsx';
 import { LoginScreen } from './auth/LoginScreen.tsx';
 import { useTheme } from './lib/theme.ts';
@@ -10,6 +10,7 @@ import { Header } from './components/layout/Header.tsx';
 import { Dashboard } from './tabs/Dashboard.tsx';
 import { Kanban } from './tabs/Kanban.tsx';
 import { Clientes } from './tabs/Clientes.tsx';
+import { ControleClientes } from './tabs/ControleClientes.tsx';
 import { Chat } from './tabs/Chat.tsx';
 import { Calendario } from './tabs/Calendario.tsx';
 import { Configuracoes } from './tabs/Configuracoes.tsx';
@@ -23,6 +24,7 @@ interface Aba extends NavItem {
 const ABAS: Aba[] = [
   { id: 'dashboard', label: 'Dashboard', titulo: 'Dashboard', icon: LayoutDashboard, perm: PERMISSIONS.DASHBOARD_VIEW, render: () => <Dashboard /> },
   { id: 'kanban', label: 'Funil', titulo: 'Funil de leads', icon: Columns3, perm: PERMISSIONS.CLIENTES_VIEW, render: () => <Kanban /> },
+  { id: 'controle-clientes', label: 'Controle', titulo: 'Controle de clientes', icon: ClipboardList, perm: PERMISSIONS.CLIENTES_VIEW, render: () => <ControleClientes /> },
   { id: 'clientes', label: 'Clientes', titulo: 'Clientes', icon: Users, perm: PERMISSIONS.CLIENTES_VIEW, render: () => <Clientes /> },
   { id: 'agenda', label: 'Agenda', titulo: 'Calendário e tarefas', icon: CalendarDays, perm: PERMISSIONS.AGENDA_VIEW, render: () => <Calendario /> },
   { id: 'chat', label: 'Chat', titulo: 'Chat', icon: MessageSquare, perm: PERMISSIONS.CHAT_VIEW, render: () => <Chat /> },

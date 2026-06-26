@@ -23,6 +23,66 @@ function limparBase64(valor: string): string {
   return valor.replace(/^data:[^;]+;base64,/, '');
 }
 
+function textoOuNull(valor: unknown): string | null {
+  const texto = String(valor ?? '').trim();
+  return texto || null;
+}
+
+function somenteDigitos(valor: unknown): string {
+  return String(valor ?? '').replace(/\D/g, '');
+}
+
+function numeroOuNull(valor: unknown): number | null {
+  if (valor == null || valor === '') return null;
+  if (typeof valor === 'number' && Number.isFinite(valor)) return valor;
+  const limpo = String(valor)
+    .replace(/\s/g, '')
+    .replace(/[R$]/gi, '')
+    .replace(/\./g, '')
+    .replace(',', '.');
+  const numero = Number(limpo);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function dataOuNull(valor: unknown): string | null {
+  const texto = String(valor ?? '').trim();
+  if (!texto) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+  const m = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (!m) return null;
+  const dia = m[1]!.padStart(2, '0');
+  const mes = m[2]!.padStart(2, '0');
+  const ano = m[3]!.length === 2 ? `20${m[3]}` : m[3]!;
+  return `${ano}-${mes}-${dia}`;
+}
+
+function controleMensalOuVazio(valor: unknown): Record<string, string> {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {};
+  const meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const bruto = valor as Record<string, unknown>;
+  const mensal: Record<string, string> = {};
+  for (const mes of meses) {
+    const status = String(bruto[mes] ?? '').trim().toUpperCase();
+    if (['A', 'P', 'C'].includes(status)) mensal[mes] = status;
+  }
+  return mensal;
+}
+
+type LinhaControle = {
+  origem_venda?: unknown;
+  vendedor_responsavel?: unknown;
+  nome?: unknown;
+  cpf_cnpj?: unknown;
+  grupo_cota?: unknown;
+  telefone?: unknown;
+  credito_vendido?: unknown;
+  cidade?: unknown;
+  estado?: unknown;
+  etapa?: unknown;
+  data_venda?: unknown;
+  controle_mensal?: unknown;
+};
+
 
 // Lista com filtros simples (etapa, busca por nome/telefone) — alimenta Clientes e Kanban.
 clientesRouter.get('/', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req, res) => {
@@ -47,6 +107,155 @@ clientesRouter.get('/', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req
     params,
   );
   res.json({ clientes: rows });
+});
+
+// Visao operacional no formato da planilha de controle comercial.
+clientesRouter.get('/controle', requirePermission(PERMISSIONS.CLIENTES_VIEW), async (req, res) => {
+  const { status, cidade, vendedor, inicio, fim, q } = req.query;
+  const cond: string[] = [];
+  const params: unknown[] = [];
+  let i = 1;
+  if (status) { cond.push(`c.etapa = $${i++}`); params.push(status); }
+  if (cidade) { cond.push(`unaccent(coalesce(c.cidade, '')) ILIKE unaccent($${i++})`); params.push(String(cidade)); }
+  if (vendedor) { cond.push(`unaccent(coalesce(c.vendedor_responsavel, '')) ILIKE unaccent($${i++})`); params.push(String(vendedor)); }
+  if (inicio) { cond.push(`c.data_venda >= $${i++}`); params.push(inicio); }
+  if (fim) { cond.push(`c.data_venda <= $${i++}`); params.push(fim); }
+  if (q) {
+    cond.push(`(
+      unaccent(coalesce(c.nome, '')) ILIKE unaccent($${i})
+      OR c.telefone ILIKE $${i}
+      OR coalesce(c.cpf_cnpj, '') ILIKE $${i}
+      OR unaccent(coalesce(c.grupo_cota, '')) ILIKE unaccent($${i})
+    )`);
+    params.push(`%${q}%`);
+    i++;
+  }
+  const where = cond.length ? `WHERE ${cond.join(' AND ')}` : '';
+  const { rows } = await query(
+    `SELECT c.id, c.nome, c.telefone, c.cpf_cnpj, c.cidade, c.estado, c.etapa,
+            c.origem_venda, c.vendedor_responsavel, c.grupo_cota,
+            c.credito_vendido::float8 AS credito_vendido,
+            c.data_venda, c.controle_mensal, c.criado_em, c.atualizado_em,
+            q.credito_pretendido::float8 AS credito_pretendido
+       FROM clientes c
+       LEFT JOIN qualificacoes q ON q.cliente_id = c.id
+       ${where}
+      ORDER BY c.data_venda DESC NULLS LAST, c.atualizado_em DESC
+      LIMIT 1000`,
+    params,
+  );
+  res.json({ clientes: rows });
+});
+
+clientesRouter.post('/controle', requirePermission(PERMISSIONS.CLIENTES_EDIT), async (req, res) => {
+  const linha = req.body as LinhaControle;
+  const telefone = somenteDigitos(linha.telefone);
+  if (!telefone) { res.status(400).json({ erro: 'telefone obrigatorio' }); return; }
+  const campos = {
+    telefone,
+    nome: textoOuNull(linha.nome),
+    cpf_cnpj: textoOuNull(linha.cpf_cnpj),
+    cidade: textoOuNull(linha.cidade),
+    estado: textoOuNull(linha.estado)?.toUpperCase(),
+    etapa: textoOuNull(linha.etapa) || 'cliente_parceiro',
+    origem_venda: textoOuNull(linha.origem_venda),
+    vendedor_responsavel: textoOuNull(linha.vendedor_responsavel),
+    grupo_cota: textoOuNull(linha.grupo_cota),
+    credito_vendido: numeroOuNull(linha.credito_vendido),
+    data_venda: dataOuNull(linha.data_venda),
+    controle_mensal: controleMensalOuVazio(linha.controle_mensal),
+  };
+  const { rows } = await query(
+    `INSERT INTO clientes (
+       telefone, nome, cpf_cnpj, cidade, estado, etapa, origem, origem_venda,
+       vendedor_responsavel, grupo_cota, credito_vendido, data_venda, controle_mensal
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, 'planilha', $7, $8, $9, $10, $11, $12::jsonb)
+     ON CONFLICT (telefone) DO UPDATE SET
+       nome = COALESCE(EXCLUDED.nome, clientes.nome),
+       cpf_cnpj = COALESCE(EXCLUDED.cpf_cnpj, clientes.cpf_cnpj),
+       cidade = COALESCE(EXCLUDED.cidade, clientes.cidade),
+       estado = COALESCE(EXCLUDED.estado, clientes.estado),
+       etapa = EXCLUDED.etapa,
+       origem_venda = COALESCE(EXCLUDED.origem_venda, clientes.origem_venda),
+       vendedor_responsavel = COALESCE(EXCLUDED.vendedor_responsavel, clientes.vendedor_responsavel),
+       grupo_cota = COALESCE(EXCLUDED.grupo_cota, clientes.grupo_cota),
+       credito_vendido = COALESCE(EXCLUDED.credito_vendido, clientes.credito_vendido),
+       data_venda = COALESCE(EXCLUDED.data_venda, clientes.data_venda),
+       controle_mensal = CASE
+         WHEN EXCLUDED.controle_mensal = '{}'::jsonb THEN clientes.controle_mensal
+         ELSE EXCLUDED.controle_mensal
+       END,
+       atualizado_em = now()
+     RETURNING *`,
+    [
+      campos.telefone, campos.nome, campos.cpf_cnpj, campos.cidade, campos.estado, campos.etapa,
+      campos.origem_venda, campos.vendedor_responsavel, campos.grupo_cota, campos.credito_vendido,
+      campos.data_venda, JSON.stringify(campos.controle_mensal),
+    ],
+  );
+  res.status(201).json({ cliente: rows[0] });
+});
+
+clientesRouter.post('/controle/importar', requirePermission(PERMISSIONS.CLIENTES_EDIT), async (req, res) => {
+  const linhas = Array.isArray(req.body?.linhas) ? req.body.linhas as LinhaControle[] : [];
+  if (!linhas.length) { res.status(400).json({ erro: 'nenhuma linha para importar' }); return; }
+  const resultado = { inseridos: 0, atualizados: 0, ignorados: [] as { linha: number; motivo: string }[] };
+
+  for (const [idx, linha] of linhas.entries()) {
+    const telefone = somenteDigitos(linha.telefone);
+    if (!telefone) {
+      resultado.ignorados.push({ linha: idx + 1, motivo: 'telefone vazio' });
+      continue;
+    }
+    const antes = await query<{ id: string }>('SELECT id FROM clientes WHERE telefone = $1', [telefone]);
+    const campos = {
+      telefone,
+      nome: textoOuNull(linha.nome),
+      cpf_cnpj: textoOuNull(linha.cpf_cnpj),
+      cidade: textoOuNull(linha.cidade),
+      estado: textoOuNull(linha.estado)?.toUpperCase(),
+      etapa: textoOuNull(linha.etapa),
+      origem_venda: textoOuNull(linha.origem_venda),
+      vendedor_responsavel: textoOuNull(linha.vendedor_responsavel),
+      grupo_cota: textoOuNull(linha.grupo_cota),
+      credito_vendido: numeroOuNull(linha.credito_vendido),
+      data_venda: dataOuNull(linha.data_venda),
+      controle_mensal: controleMensalOuVazio(linha.controle_mensal),
+    };
+    await query(
+      `INSERT INTO clientes (
+         telefone, nome, cpf_cnpj, cidade, estado, etapa, origem, origem_venda,
+         vendedor_responsavel, grupo_cota, credito_vendido, data_venda, controle_mensal
+       )
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'cliente_parceiro'), 'planilha', $7, $8, $9, $10, $11, $12::jsonb)
+       ON CONFLICT (telefone) DO UPDATE SET
+         nome = COALESCE(EXCLUDED.nome, clientes.nome),
+         cpf_cnpj = COALESCE(EXCLUDED.cpf_cnpj, clientes.cpf_cnpj),
+         cidade = COALESCE(EXCLUDED.cidade, clientes.cidade),
+         estado = COALESCE(EXCLUDED.estado, clientes.estado),
+         etapa = COALESCE(EXCLUDED.etapa, clientes.etapa),
+         origem_venda = COALESCE(EXCLUDED.origem_venda, clientes.origem_venda),
+         vendedor_responsavel = COALESCE(EXCLUDED.vendedor_responsavel, clientes.vendedor_responsavel),
+         grupo_cota = COALESCE(EXCLUDED.grupo_cota, clientes.grupo_cota),
+         credito_vendido = COALESCE(EXCLUDED.credito_vendido, clientes.credito_vendido),
+         data_venda = COALESCE(EXCLUDED.data_venda, clientes.data_venda),
+         controle_mensal = CASE
+           WHEN EXCLUDED.controle_mensal = '{}'::jsonb THEN clientes.controle_mensal
+           ELSE EXCLUDED.controle_mensal
+         END,
+         atualizado_em = now()`,
+      [
+        campos.telefone, campos.nome, campos.cpf_cnpj, campos.cidade, campos.estado, campos.etapa,
+        campos.origem_venda, campos.vendedor_responsavel, campos.grupo_cota, campos.credito_vendido,
+        campos.data_venda, JSON.stringify(campos.controle_mensal),
+      ],
+    );
+    if (antes.rows[0]) resultado.atualizados++;
+    else resultado.inseridos++;
+  }
+
+  res.json({ resultado });
 });
 
 // Respostas rapidas compartilhadas no chat.

@@ -18,6 +18,12 @@ export interface Cliente {
   estado_civil: string | null;
   melhor_horario_contato: string | null;
   observacoes: string | null;
+  origem_venda: string | null;
+  vendedor_responsavel: string | null;
+  grupo_cota: string | null;
+  credito_vendido: number | null;
+  data_venda: string | null;
+  controle_mensal: Record<string, string>;
   recebe_bolsa_familia: boolean | null;
   entende_consorcio: boolean | null;
   origem: string | null;
@@ -63,6 +69,8 @@ export async function atualizarCliente(id: string, campos: Partial<Cliente>): Pr
   const permitidos: (keyof Cliente)[] = [
     'nome', 'cidade', 'estado', 'profissao', 'renda_aproximada', 'email', 'cpf_cnpj',
     'data_nascimento', 'estado_civil', 'melhor_horario_contato', 'observacoes',
+    'origem_venda', 'vendedor_responsavel', 'grupo_cota', 'credito_vendido', 'data_venda',
+    'controle_mensal',
     'recebe_bolsa_familia', 'entende_consorcio', 'origem', 'etapa', 'tags', 'vip',
   ];
   const sets: string[] = [];

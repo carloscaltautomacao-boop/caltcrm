@@ -37,6 +37,12 @@ export interface Cliente {
   estado_civil: string | null;
   melhor_horario_contato: string | null;
   observacoes: string | null;
+  origem_venda: string | null;
+  vendedor_responsavel: string | null;
+  grupo_cota: string | null;
+  credito_vendido: number | null;
+  data_venda: string | null;
+  controle_mensal: Record<string, string>;
   recebe_bolsa_familia: boolean | null;
   entende_consorcio: boolean | null;
   etapa: string;

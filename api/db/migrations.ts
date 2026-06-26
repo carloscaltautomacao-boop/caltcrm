@@ -53,6 +53,14 @@ const DDL: string[] = [
   `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS estado_civil text`,
   `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS melhor_horario_contato text`,
   `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS observacoes text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS origem_venda text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS vendedor_responsavel text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS grupo_cota text`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS credito_vendido numeric`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS data_venda date`,
+  `ALTER TABLE clientes ADD COLUMN IF NOT EXISTS controle_mensal jsonb NOT NULL DEFAULT '{}'`,
+  `CREATE INDEX IF NOT EXISTS idx_clientes_vendedor_responsavel ON clientes (vendedor_responsavel)`,
+  `CREATE INDEX IF NOT EXISTS idx_clientes_data_venda ON clientes (data_venda)`,
 
   // ----- Qualificacao (1:1 com cliente) -----
   `CREATE TABLE IF NOT EXISTS qualificacoes (
